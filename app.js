@@ -86,13 +86,19 @@ const SB = {
     this.mobileBtn = document.getElementById('mobile-menu-btn');
 
     // Restore persisted collapsed state (desktop only)
-    if (!this.isMobile() && state.sidebarCollapsed) {
-      this.el.classList.add('collapsed');
-      document.body.classList.add('sidebar-collapsed');
+    if (!this.isMobile()) {
+      if (state.sidebarCollapsed) {
+        this.el.classList.add('collapsed');
+        document.body.classList.add('sidebar-collapsed');
+      } else {
+        this.el.classList.remove('collapsed');
+        document.body.classList.remove('sidebar-collapsed');
+      }
     }
 
-    // Desktop toggle button
-    this.toggle.addEventListener('click', () => {
+    // Toggle button — works on both desktop (collapse) and mobile (drawer)
+    this.toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (this.isMobile()) {
         this.openMobile();
       } else {
