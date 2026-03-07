@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Planner — Your Day, Your Way</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Fraunces:ital,wght@0,300;0,500;1,300&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- ========== SIDEBAR ========== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-icon">✦</span>
+      <span class="brand-name">Planner</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-view="dashboard">
+        <span class="nav-icon">◈</span>
+        <span>Dashboard</span>
+      </a>
+      <a href="#" class="nav-item" data-view="year-goals">
+        <span class="nav-icon">◎</span>
+        <span>Year Goals</span>
+      </a>
+      <a href="#" class="nav-item" data-view="month-goals">
+        <span class="nav-icon">◉</span>
+        <span>Month Goals</span>
+      </a>
+      <a href="#" class="nav-item" data-view="week-goals">
+        <span class="nav-icon">◐</span>
+        <span>Week Goals</span>
+      </a>
+      <a href="#" class="nav-item" data-view="week-planner">
+        <span class="nav-icon">▦</span>
+        <span>Week Planner</span>
+      </a>
+      <a href="#" class="nav-item" data-view="calendar">
+        <span class="nav-icon">▣</span>
+        <span>Calendar</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="today-pill">
+        <span id="sidebar-date">Today</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ========== MAIN CONTENT ========== -->
+  <main class="main-content">
+
+    <!-- ===== DASHBOARD VIEW ===== -->
+    <section class="view active" id="view-dashboard">
+      <header class="view-header">
+        <div>
+          <h1 class="view-title">Good <span id="greeting-time">morning</span> ☀️</h1>
+          <p class="view-subtitle" id="full-date-display">Loading...</p>
+        </div>
+        <button class="btn-primary" id="quick-add-btn">+ Quick Add Task</button>
+      </header>
+
+      <!-- Dashboard Widgets -->
+      <div class="dashboard-grid">
+        <!-- Today's Tasks Widget -->
+        <div class="widget widget-tall">
+          <div class="widget-header">
+            <h3>Today's Tasks</h3>
+            <span class="badge" id="today-task-count">0</span>
+          </div>
+          <div class="widget-body" id="dashboard-today-tasks">
+            <p class="empty-state">No tasks for today. Add one!</p>
+          </div>
+        </div>
+
+        <!-- Weekly Progress Widget -->
+        <div class="widget">
+          <div class="widget-header">
+            <h3>Weekly Progress</h3>
+          </div>
+          <div class="widget-body">
+            <div class="progress-ring-container">
+              <svg class="progress-ring" viewBox="0 0 80 80">
+                <circle class="ring-bg" cx="40" cy="40" r="30"/>
+                <circle class="ring-fill" id="weekly-ring" cx="40" cy="40" r="30"/>
+              </svg>
+              <div class="progress-label">
+                <span id="weekly-pct">0%</span>
+                <small>done</small>
+              </div>
+            </div>
+            <p class="progress-caption" id="weekly-caption">0 of 0 tasks completed this week</p>
+          </div>
+        </div>
+
+        <!-- Image Widgets container -->
+        <div class="widget widget-image" id="image-widget-1">
+          <div class="widget-header">
+            <h3>Image Board</h3>
+            <label class="icon-btn upload-label" title="Upload image">
+              📎
+              <input type="file" accept="image/*" class="hidden-file" data-widget="img1" />
+            </label>
+          </div>
+          <div class="image-drop-zone" id="img-zone-1">
+            <p>Click 📎 to attach an image</p>
+            <img id="widget-img-1" src="" alt="" class="widget-img hidden" />
+          </div>
+        </div>
+
+        <!-- Weekly Goals Summary -->
+        <div class="widget">
+          <div class="widget-header">
+            <h3>This Week's Goals</h3>
+          </div>
+          <div class="widget-body" id="dashboard-week-goals">
+            <p class="empty-state">No weekly goals set.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== YEAR GOALS VIEW ===== -->
+    <section class="view" id="view-year-goals">
+      <header class="view-header">
+        <div>
+          <h1 class="view-title">Year Goals</h1>
+          <p class="view-subtitle">Big dreams for <span id="current-year-label"></span></p>
+        </div>
+        <button class="btn-primary" onclick="openGoalModal('year')">+ Add Goal</button>
+      </header>
+      <div class="goals-grid" id="year-goals-list">
+        <p class="empty-state full-width">No yearly goals yet. Start dreaming big!</p>
+      </div>
+    </section>
+
+    <!-- ===== MONTH GOALS VIEW ===== -->
+    <section class="view" id="view-month-goals">
+      <header class="view-header">
+        <div>
+          <h1 class="view-title">Month Goals</h1>
+          <p class="view-subtitle">Focus for <span id="current-month-label"></span></p>
+        </div>
+        <button class="btn-primary" onclick="openGoalModal('month')">+ Add Goal</button>
+      </header>
+      <div class="goals-grid" id="month-goals-list">
+        <p class="empty-state full-width">No monthly goals yet.</p>
+      </div>
+    </section>
+
+    <!-- ===== WEEK GOALS VIEW ===== -->
+    <section class="view" id="view-week-goals">
+      <header class="view-header">
+        <div>
+          <h1 class="view-title">Week Goals</h1>
+          <p class="view-subtitle">Targets for this week</p>
+        </div>
+        <button class="btn-primary" onclick="openGoalModal('week')">+ Add Goal</button>
+      </header>
+      <div class="goals-grid" id="week-goals-list">
+        <p class="empty-state full-width">No weekly goals yet.</p>
+      </div>
+    </section>
+
+    <!-- ===== WEEK PLANNER VIEW ===== -->
+    <section class="view" id="view-week-planner">
+      <header class="view-header">
+        <div>
+          <h1 class="view-title">Week Planner</h1>
+          <p class="view-subtitle" id="week-planner-range">Loading...</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn-ghost" id="week-prev">← Prev</button>
+          <button class="btn-ghost" id="week-next">Next →</button>
+          <button class="btn-primary" id="week-add-task-btn">+ Add Task</button>
+        </div>
+      </header>
+      <div class="week-board" id="week-board">
+        <!-- Columns generated by JS -->
+      </div>
+    </section>
+
+    <!-- ===== CALENDAR VIEW ===== -->
+    <section class="view" id="view-calendar">
+      <header class="view-header">
+        <div>
+          <h1 class="view-title">Calendar</h1>
+          <p class="view-subtitle" id="cal-current-label">Loading...</p>
+        </div>
+        <div class="header-actions">
+          <div class="view-switcher">
+            <button class="vsw-btn active" data-calview="month">Month</button>
+            <button class="vsw-btn" data-calview="week">Week</button>
+            <button class="vsw-btn" data-calview="day">Day</button>
+            <button class="vsw-btn" data-calview="year">Year</button>
+          </div>
+          <button class="btn-ghost" id="cal-prev">←</button>
+          <button class="btn-ghost" id="cal-today-btn">Today</button>
+          <button class="btn-ghost" id="cal-next">→</button>
+          <button class="btn-primary" id="cal-add-task-btn">+ Add Task</button>
+        </div>
+      </header>
+      <div id="calendar-container">
+        <!-- Rendered by JS -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========== TASK MODAL ========== -->
+  <div class="modal-overlay hidden" id="task-modal-overlay">
+    <div class="modal" id="task-modal">
+      <div class="modal-header">
+        <h2 id="task-modal-title">New Task</h2>
+        <button class="modal-close" id="task-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Task Title *</label>
+          <input type="text" id="task-title-input" placeholder="What needs to be done?" />
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="task-desc-input" placeholder="Add more details..." rows="3"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date *</label>
+            <input type="date" id="task-date-input" />
+          </div>
+          <div class="form-group">
+            <label>Time</label>
+            <input type="time" id="task-time-input" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Color Tag</label>
+          <div class="color-picker" id="task-color-picker">
+            <span class="color-dot selected" data-color="#b5d5c5" style="background:#b5d5c5"></span>
+            <span class="color-dot" data-color="#ffd6a5" style="background:#ffd6a5"></span>
+            <span class="color-dot" data-color="#ffafcc" style="background:#ffafcc"></span>
+            <span class="color-dot" data-color="#a2d2ff" style="background:#a2d2ff"></span>
+            <span class="color-dot" data-color="#cdb4db" style="background:#cdb4db"></span>
+            <span class="color-dot" data-color="#caffbf" style="background:#caffbf"></span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Attach Image</label>
+          <label class="file-upload-area">
+            <span id="task-img-label">📎 Click to upload image</span>
+            <input type="file" accept="image/*" id="task-img-input" class="hidden-file" />
+          </label>
+          <img id="task-img-preview" src="" alt="" class="img-preview hidden" />
+        </div>
+        <input type="hidden" id="task-edit-id" value="" />
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="task-modal-cancel">Cancel</button>
+        <button class="btn-primary" id="task-modal-save">Save Task</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== GOAL MODAL ========== -->
+  <div class="modal-overlay hidden" id="goal-modal-overlay">
+    <div class="modal" id="goal-modal">
+      <div class="modal-header">
+        <h2 id="goal-modal-title">New Goal</h2>
+        <button class="modal-close" id="goal-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Goal Title *</label>
+          <input type="text" id="goal-title-input" placeholder="What do you want to achieve?" />
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="goal-desc-input" placeholder="Describe your goal..." rows="4"></textarea>
+        </div>
+        <input type="hidden" id="goal-type-input" value="" />
+        <input type="hidden" id="goal-edit-id" value="" />
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="goal-modal-cancel">Cancel</button>
+        <button class="btn-primary" id="goal-modal-save">Save Goal</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== TASK DETAIL MODAL ========== -->
+  <div class="modal-overlay hidden" id="detail-modal-overlay">
+    <div class="modal" id="detail-modal">
+      <div class="modal-header">
+        <h2 id="detail-task-title">Task Detail</h2>
+        <button class="modal-close" id="detail-modal-close">✕</button>
+      </div>
+      <div class="modal-body" id="detail-modal-body">
+      </div>
+      <div class="modal-footer">
+        <button class="btn-danger" id="detail-delete-btn">Delete Task</button>
+        <button class="btn-primary" id="detail-edit-btn">Edit Task</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
