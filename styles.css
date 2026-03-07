@@ -113,25 +113,32 @@ body {
   width: var(--sidebar-w-collapsed);
 }
 
-/* Hover-expand when collapsed (desktop only) */
+/* ── Hover-expand on desktop when collapsed ── */
+/* Only expands on deliberate hover, with a 120ms delay to prevent flicker */
 @media (min-width: 901px) {
+  .sidebar.collapsed {
+    transition: width 220ms cubic-bezier(0.4, 0, 0.2, 1);
+    /* Delay expanding so accidental passes don't trigger it */
+    transition-delay: 0ms;
+  }
   .sidebar.collapsed:hover {
     width: var(--sidebar-w);
+    transition: width 220ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition-delay: 120ms;
   }
-  /* When hover-expanding, show labels */
+  /* Show labels when hover-expanded */
   .sidebar.collapsed:hover .nav-label,
   .sidebar.collapsed:hover .brand-name,
   .sidebar.collapsed:hover .sidebar-date-text {
     opacity: 1;
     transform: translateX(0);
     pointer-events: auto;
+    overflow: visible;
     width: auto;
   }
-  /* Suppress tooltip on hover-expand */
-  .sidebar.collapsed:hover .nav-item::after,
-  .sidebar.collapsed:hover .nav-item::before,
-  .sidebar.collapsed:hover .sidebar-date-block::after,
-  .sidebar.collapsed:hover .sidebar-date-block::before {
+  /* Hide tooltips while hover-expanded (labels are visible) */
+  .sidebar.collapsed:hover .nav-item[data-tooltip]::after,
+  .sidebar.collapsed:hover .nav-item[data-tooltip]::before {
     display: none !important;
   }
 }
