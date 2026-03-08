@@ -1,27 +1,79 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Planner — Your Day, Your Way</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="manifest" href="manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Fraunces:ital,wght@0,300;0,500;1,300&display=swap" rel="stylesheet" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Planner" />
+  <meta name="theme-color" content="#18181b" />
+  <meta name="description" content="A beautiful personal planner for tasks, goals and calendar." />
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
-  <!-- Mobile overlay (shown when sidebar open on small screens) -->
+  <!-- ===== FIREBASE AUTH GATE ===== -->
+  <div id="auth-gate" class="auth-gate">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <span class="brand-icon">✦</span>
+        <span>Planner</span>
+      </div>
+      <h2 class="auth-title">Welcome back</h2>
+      <p class="auth-sub">Sign in to sync your tasks across all devices</p>
+
+      <div id="auth-error" class="auth-error hidden"></div>
+
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="auth-email" placeholder="you@example.com" />
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="auth-password" placeholder="••••••••" />
+      </div>
+
+      <button class="btn-primary btn-full" id="auth-signin-btn">Sign In</button>
+      <button class="btn-ghost btn-full" id="auth-signup-btn">Create Account</button>
+      <div class="auth-divider"><span>or</span></div>
+      <button class="btn-ghost btn-full" id="auth-google-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" style="margin-right:8px;vertical-align:middle"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Continue with Google
+      </button>
+      <button class="btn-ghost btn-full" id="auth-skip-btn" style="margin-top:8px;font-size:13px;color:var(--text-muted)">
+        Use without account (local only)
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== NOTIFICATION PERMISSION BANNER ===== -->
+  <div id="notif-banner" class="notif-banner hidden">
+    <span>🔔 Enable reminders for your tasks?</span>
+    <div style="display:flex;gap:8px">
+      <button class="btn-primary" id="notif-allow-btn" style="padding:6px 14px;font-size:13px">Allow</button>
+      <button class="btn-ghost" id="notif-deny-btn" style="padding:6px 14px;font-size:13px">Not now</button>
+    </div>
+  </div>
+
+  <!-- ===== TOAST ===== -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Mobile overlay -->
   <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
   <!-- ========== SIDEBAR ========== -->
   <aside class="sidebar" id="sidebar">
-
-    <!-- Top bar: hamburger + brand -->
     <div class="sidebar-top">
       <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
-        <span class="h-line"></span>
-        <span class="h-line"></span>
-        <span class="h-line"></span>
+        <span class="h-line"></span><span class="h-line"></span><span class="h-line"></span>
       </button>
       <div class="sidebar-brand">
         <span class="brand-icon">✦</span>
@@ -29,114 +81,69 @@
       </div>
     </div>
 
-    <!-- Navigation items -->
-    <nav class="sidebar-nav" role="navigation" aria-label="Main navigation">
-
+    <nav class="sidebar-nav" role="navigation">
       <a href="#" class="nav-item active" data-view="dashboard" data-tooltip="Dashboard">
         <span class="nav-indicator"></span>
-        <span class="nav-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-            <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-            <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-            <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-          </svg>
-        </span>
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
         <span class="nav-label">Dashboard</span>
       </a>
-
       <a href="#" class="nav-item" data-view="year-goals" data-tooltip="Year Goals">
         <span class="nav-indicator"></span>
-        <span class="nav-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-          </svg>
-        </span>
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
         <span class="nav-label">Year Goals</span>
       </a>
-
       <a href="#" class="nav-item" data-view="month-goals" data-tooltip="Month Goals">
         <span class="nav-indicator"></span>
-        <span class="nav-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2"/>
-            <line x1="16" y1="2" x2="16" y2="6"/>
-            <line x1="8" y1="2" x2="8" y2="6"/>
-            <line x1="3" y1="10" x2="21" y2="10"/>
-            <rect x="7" y="14" width="3" height="3" rx="0.5" fill="currentColor" stroke="none"/>
-          </svg>
-        </span>
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><rect x="7" y="14" width="3" height="3" rx="0.5" fill="currentColor" stroke="none"/></svg></span>
         <span class="nav-label">Month Goals</span>
       </a>
-
       <a href="#" class="nav-item" data-view="week-goals" data-tooltip="Week Goals">
         <span class="nav-indicator"></span>
-        <span class="nav-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <circle cx="12" cy="12" r="6"/>
-            <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/>
-          </svg>
-        </span>
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg></span>
         <span class="nav-label">Week Goals</span>
       </a>
-
       <a href="#" class="nav-item" data-view="week-planner" data-tooltip="Week Planner">
         <span class="nav-indicator"></span>
-        <span class="nav-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3"  y="3" width="5" height="18" rx="1"/>
-            <rect x="10" y="3" width="5" height="12" rx="1"/>
-            <rect x="17" y="3" width="5" height="15" rx="1"/>
-          </svg>
-        </span>
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg></span>
         <span class="nav-label">Week Planner</span>
       </a>
-
       <a href="#" class="nav-item" data-view="calendar" data-tooltip="Calendar">
         <span class="nav-indicator"></span>
-        <span class="nav-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2"/>
-            <line x1="16" y1="2" x2="16" y2="6"/>
-            <line x1="8"  y1="2" x2="8"  y2="6"/>
-            <line x1="3"  y1="10" x2="21" y2="10"/>
-            <circle cx="8"  cy="15" r="1" fill="currentColor" stroke="none"/>
-            <circle cx="12" cy="15" r="1" fill="currentColor" stroke="none"/>
-            <circle cx="16" cy="15" r="1" fill="currentColor" stroke="none"/>
-          </svg>
-        </span>
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="15" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="15" r="1" fill="currentColor" stroke="none"/><circle cx="16" cy="15" r="1" fill="currentColor" stroke="none"/></svg></span>
         <span class="nav-label">Calendar</span>
       </a>
-
     </nav>
 
-    <!-- Footer: today's date -->
     <div class="sidebar-footer">
-      <div class="sidebar-date-block" data-tooltip="Today">
-        <span class="sidebar-date-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12 6 12 12 16 14"/>
-          </svg>
+      <!-- Dark mode toggle -->
+      <button class="dark-mode-toggle" id="dark-mode-toggle" data-tooltip="Toggle dark mode">
+        <span class="nav-icon" id="theme-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
         </span>
+        <span class="nav-label" id="theme-label">Light Mode</span>
+      </button>
+      <!-- User info / sign out -->
+      <div class="sidebar-user" id="sidebar-user">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <div class="user-info">
+          <span class="user-name" id="user-name">Guest</span>
+          <button class="sign-out-btn" id="sign-out-btn">Sign out</button>
+        </div>
+      </div>
+      <div class="sidebar-date-block" data-tooltip="Today">
+        <span class="sidebar-date-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
         <span class="sidebar-date-text" id="sidebar-date">Today</span>
       </div>
     </div>
-
   </aside>
 
   <!-- ========== MAIN CONTENT ========== -->
   <main class="main-content" id="main-content">
 
-    <!-- Mobile top bar (visible on small screens) -->
     <div class="mobile-topbar">
-      <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Open menu">
-        <span class="h-line"></span>
-        <span class="h-line"></span>
-        <span class="h-line"></span>
-      </button>
+      <button class="mobile-menu-btn" id="mobile-menu-btn"><span class="h-line"></span><span class="h-line"></span><span class="h-line"></span></button>
       <span class="mobile-brand">✦ Planner</span>
+      <button class="mobile-theme-btn" id="mobile-theme-btn">🌙</button>
     </div>
 
     <!-- ===== DASHBOARD ===== -->
@@ -154,9 +161,7 @@
             <h3>Today's Tasks</h3>
             <span class="badge" id="today-task-count">0</span>
           </div>
-          <div class="widget-body" id="dashboard-today-tasks">
-            <p class="empty-state">No tasks for today. Add one!</p>
-          </div>
+          <div class="widget-body" id="dashboard-today-tasks"><p class="empty-state">No tasks for today. Add one!</p></div>
         </div>
         <div class="widget">
           <div class="widget-header"><h3>Weekly Progress</h3></div>
@@ -166,21 +171,15 @@
                 <circle class="ring-bg" cx="40" cy="40" r="30"/>
                 <circle class="ring-fill" id="weekly-ring" cx="40" cy="40" r="30"/>
               </svg>
-              <div class="progress-label">
-                <span id="weekly-pct">0%</span>
-                <small>done</small>
-              </div>
+              <div class="progress-label"><span id="weekly-pct">0%</span><small>done</small></div>
             </div>
             <p class="progress-caption" id="weekly-caption">0 of 0 tasks completed this week</p>
           </div>
         </div>
-        <div class="widget widget-image" id="image-widget-1">
+        <div class="widget widget-image">
           <div class="widget-header">
             <h3>Image Board</h3>
-            <label class="icon-btn upload-label" title="Upload image">
-              📎
-              <input type="file" accept="image/*" class="hidden-file" data-widget="img1" />
-            </label>
+            <label class="icon-btn upload-label" title="Upload image">📎<input type="file" accept="image/*" class="hidden-file" data-widget="img1" /></label>
           </div>
           <div class="image-drop-zone" id="img-zone-1">
             <p>Click 📎 to attach an image</p>
@@ -189,9 +188,7 @@
         </div>
         <div class="widget">
           <div class="widget-header"><h3>This Week's Goals</h3></div>
-          <div class="widget-body" id="dashboard-week-goals">
-            <p class="empty-state">No weekly goals set.</p>
-          </div>
+          <div class="widget-body" id="dashboard-week-goals"><p class="empty-state">No weekly goals set.</p></div>
         </div>
       </div>
     </section>
@@ -199,52 +196,34 @@
     <!-- ===== YEAR GOALS ===== -->
     <section class="view" id="view-year-goals">
       <header class="view-header">
-        <div>
-          <h1 class="view-title">Year Goals</h1>
-          <p class="view-subtitle">Big dreams for <span id="current-year-label"></span></p>
-        </div>
+        <div><h1 class="view-title">Year Goals</h1><p class="view-subtitle">Big dreams for <span id="current-year-label"></span></p></div>
         <button class="btn-primary" onclick="openGoalModal('year')">+ Add Goal</button>
       </header>
-      <div class="goals-grid" id="year-goals-list">
-        <p class="empty-state full-width">No yearly goals yet. Start dreaming big!</p>
-      </div>
+      <div class="goals-grid" id="year-goals-list"><p class="empty-state full-width">No yearly goals yet. Start dreaming big!</p></div>
     </section>
 
     <!-- ===== MONTH GOALS ===== -->
     <section class="view" id="view-month-goals">
       <header class="view-header">
-        <div>
-          <h1 class="view-title">Month Goals</h1>
-          <p class="view-subtitle">Focus for <span id="current-month-label"></span></p>
-        </div>
+        <div><h1 class="view-title">Month Goals</h1><p class="view-subtitle">Focus for <span id="current-month-label"></span></p></div>
         <button class="btn-primary" onclick="openGoalModal('month')">+ Add Goal</button>
       </header>
-      <div class="goals-grid" id="month-goals-list">
-        <p class="empty-state full-width">No monthly goals yet.</p>
-      </div>
+      <div class="goals-grid" id="month-goals-list"><p class="empty-state full-width">No monthly goals yet.</p></div>
     </section>
 
     <!-- ===== WEEK GOALS ===== -->
     <section class="view" id="view-week-goals">
       <header class="view-header">
-        <div>
-          <h1 class="view-title">Week Goals</h1>
-          <p class="view-subtitle">Targets for this week</p>
-        </div>
+        <div><h1 class="view-title">Week Goals</h1><p class="view-subtitle">Targets for this week</p></div>
         <button class="btn-primary" onclick="openGoalModal('week')">+ Add Goal</button>
       </header>
-      <div class="goals-grid" id="week-goals-list">
-        <p class="empty-state full-width">No weekly goals yet.</p>
-      </div>
+      <div class="goals-grid" id="week-goals-list"><p class="empty-state full-width">No weekly goals yet.</p></div>
     </section>
 
     <!-- ===== WEEK PLANNER ===== -->
     <section class="view" id="view-week-planner">
       <header class="view-header">
-        <div>
-          <h1 class="view-title">Week Planner</h1>
-          <p class="view-subtitle" id="week-planner-range">Loading...</p>
-        </div>
+        <div><h1 class="view-title">Week Planner</h1><p class="view-subtitle" id="week-planner-range">Loading...</p></div>
         <div class="header-actions">
           <button class="btn-ghost" id="week-prev">← Prev</button>
           <button class="btn-ghost" id="week-next">Next →</button>
@@ -257,10 +236,7 @@
     <!-- ===== CALENDAR ===== -->
     <section class="view" id="view-calendar">
       <header class="view-header">
-        <div>
-          <h1 class="view-title">Calendar</h1>
-          <p class="view-subtitle" id="cal-current-label">Loading...</p>
-        </div>
+        <div><h1 class="view-title">Calendar</h1><p class="view-subtitle" id="cal-current-label">Loading...</p></div>
         <div class="header-actions">
           <div class="view-switcher">
             <button class="vsw-btn active" data-calview="month">Month</button>
@@ -293,7 +269,7 @@
         </div>
         <div class="form-group">
           <label>Description</label>
-          <textarea id="task-desc-input" placeholder="Add more details..." rows="3"></textarea>
+          <textarea id="task-desc-input" placeholder="Add more details..." rows="2"></textarea>
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -305,9 +281,39 @@
             <input type="time" id="task-time-input" />
           </div>
         </div>
+        <!-- UPGRADE: Recurring Tasks -->
+        <div class="form-row">
+          <div class="form-group">
+            <label>🔁 Repeat</label>
+            <select id="task-recurrence-input">
+              <option value="none">No repeat</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+          <div class="form-group" id="recurrence-end-group">
+            <label>Ends on</label>
+            <input type="date" id="task-recurrence-end" />
+          </div>
+        </div>
+        <!-- UPGRADE: Reminder notification -->
+        <div class="form-group">
+          <label>🔔 Reminder</label>
+          <select id="task-reminder-input">
+            <option value="none">No reminder</option>
+            <option value="0">At task time</option>
+            <option value="5">5 minutes before</option>
+            <option value="15">15 minutes before</option>
+            <option value="30">30 minutes before</option>
+            <option value="60">1 hour before</option>
+            <option value="1440">1 day before</option>
+          </select>
+        </div>
         <div class="form-group">
           <label>Color Tag</label>
-          <div class="color-picker" id="task-color-picker">
+          <div class="color-picker">
             <span class="color-dot selected" data-color="#b5d5c5" style="background:#b5d5c5"></span>
             <span class="color-dot" data-color="#ffd6a5" style="background:#ffd6a5"></span>
             <span class="color-dot" data-color="#ffafcc" style="background:#ffafcc"></span>
@@ -341,16 +347,9 @@
         <button class="modal-close" id="goal-modal-close">✕</button>
       </div>
       <div class="modal-body">
-        <div class="form-group">
-          <label>Goal Title *</label>
-          <input type="text" id="goal-title-input" placeholder="What do you want to achieve?" />
-        </div>
-        <div class="form-group">
-          <label>Description</label>
-          <textarea id="goal-desc-input" placeholder="Describe your goal..." rows="4"></textarea>
-        </div>
-        <input type="hidden" id="goal-type-input" value="" />
-        <input type="hidden" id="goal-edit-id" value="" />
+        <div class="form-group"><label>Goal Title *</label><input type="text" id="goal-title-input" placeholder="What do you want to achieve?" /></div>
+        <div class="form-group"><label>Description</label><textarea id="goal-desc-input" placeholder="Describe your goal..." rows="3"></textarea></div>
+        <input type="hidden" id="goal-type-input" /><input type="hidden" id="goal-edit-id" />
       </div>
       <div class="modal-footer">
         <button class="btn-ghost" id="goal-modal-cancel">Cancel</button>
@@ -368,12 +367,37 @@
       </div>
       <div class="modal-body" id="detail-modal-body"></div>
       <div class="modal-footer">
-        <button class="btn-danger" id="detail-delete-btn">Delete Task</button>
+        <button class="btn-danger" id="detail-delete-btn">Delete</button>
         <button class="btn-primary" id="detail-edit-btn">Edit Task</button>
       </div>
     </div>
   </div>
 
+  <!-- ========== MOBILE BOTTOM NAV ========== -->
+  <nav class="mobile-bottom-nav">
+    <div class="bottom-nav-inner">
+      <a href="#" class="bottom-nav-item active" data-view="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        Home
+      </a>
+      <a href="#" class="bottom-nav-item" data-view="week-planner">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>
+        Planner
+      </a>
+      <a href="#" class="bottom-nav-item" data-view="calendar">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Calendar
+      </a>
+      <a href="#" class="bottom-nav-item" data-view="year-goals">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        Goals
+      </a>
+    </div>
+  </nav>
+
+  <button class="mobile-fab" id="mobile-fab" aria-label="Add new task">+</button>
+
   <script src="app.js"></script>
+  <script src="upgrades.js"></script>
 </body>
 </html>
