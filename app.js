@@ -1097,13 +1097,13 @@ function initEventListeners() {
   });
 
   // Dashboard
-  document.getElementById('quick-add-btn').addEventListener('click',()=>openTaskModal());
+  document.getElementById('quick-add-btn')?.addEventListener('click',()=>openTaskModal());
 
   // Task Modal
-  document.getElementById('task-modal-close').addEventListener('click',closeTaskModal);
-  document.getElementById('task-modal-cancel').addEventListener('click',closeTaskModal);
-  document.getElementById('task-modal-save').addEventListener('click',saveTask);
-  document.getElementById('task-modal-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeTaskModal();});
+  document.getElementById('task-modal-close')?.addEventListener('click',closeTaskModal);
+  document.getElementById('task-modal-cancel')?.addEventListener('click',closeTaskModal);
+  document.getElementById('task-modal-save')?.addEventListener('click',saveTask);
+  document.getElementById('task-modal-overlay')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeTaskModal();});
 
   // Color dots
   document.querySelectorAll('.color-dot').forEach(dot=>{
@@ -1111,7 +1111,7 @@ function initEventListeners() {
   });
 
   // Task image
-  document.getElementById('task-img-input').addEventListener('change',async e=>{
+  document.getElementById('task-img-input')?.addEventListener('change',async e=>{
     const file=e.target.files[0]; if(!file) return;
     taskModalImage=await fileToBase64(file);
     document.getElementById('task-img-preview').src=taskModalImage;
@@ -1120,32 +1120,32 @@ function initEventListeners() {
   });
 
   // Recurrence end date visibility
-  document.getElementById('task-recurrence-input').addEventListener('change', e=>{
+  document.getElementById('task-recurrence-input')?.addEventListener('change', e=>{
     document.getElementById('recurrence-end-group').style.opacity = e.target.value==='none' ? '0.4' : '1';
   });
 
   // Goal Modal
-  document.getElementById('goal-modal-close').addEventListener('click',closeGoalModal);
-  document.getElementById('goal-modal-cancel').addEventListener('click',closeGoalModal);
-  document.getElementById('goal-modal-save').addEventListener('click',saveGoal);
-  document.getElementById('goal-modal-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeGoalModal();});
+  document.getElementById('goal-modal-close')?.addEventListener('click',closeGoalModal);
+  document.getElementById('goal-modal-cancel')?.addEventListener('click',closeGoalModal);
+  document.getElementById('goal-modal-save')?.addEventListener('click',saveGoal);
+  document.getElementById('goal-modal-overlay')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeGoalModal();});
 
   // Detail Modal
-  document.getElementById('detail-modal-close').addEventListener('click',closeDetailModal);
-  document.getElementById('detail-modal-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeDetailModal();});
-  document.getElementById('detail-delete-btn').addEventListener('click',()=>{if(detailTaskId){deleteTask(detailTaskId);closeDetailModal();}});
-  document.getElementById('detail-edit-btn').addEventListener('click',()=>{const id=detailTaskId;closeDetailModal();openTaskModal(id);});
+  document.getElementById('detail-modal-close')?.addEventListener('click',closeDetailModal);
+  document.getElementById('detail-modal-overlay')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeDetailModal();});
+  document.getElementById('detail-delete-btn')?.addEventListener('click',()=>{if(detailTaskId){deleteTask(detailTaskId);closeDetailModal();}});
+  document.getElementById('detail-edit-btn')?.addEventListener('click',()=>{const id=detailTaskId;closeDetailModal();openTaskModal(id);});
 
   // Week Planner
-  document.getElementById('week-prev').addEventListener('click',()=>{state.weekPlannerOffset--;saveState();renderWeekPlanner();});
-  document.getElementById('week-next').addEventListener('click',()=>{state.weekPlannerOffset++;saveState();renderWeekPlanner();});
-  document.getElementById('week-add-task-btn').addEventListener('click',()=>openTaskModal());
+  document.getElementById('week-prev')?.addEventListener('click',()=>{state.weekPlannerOffset--;saveState();renderWeekPlanner();});
+  document.getElementById('week-next')?.addEventListener('click',()=>{state.weekPlannerOffset++;saveState();renderWeekPlanner();});
+  document.getElementById('week-add-task-btn')?.addEventListener('click',()=>openTaskModal());
 
   // Calendar
-  document.getElementById('cal-prev').addEventListener('click',()=>calNavigate(-1));
-  document.getElementById('cal-next').addEventListener('click',()=>calNavigate(1));
-  document.getElementById('cal-today-btn').addEventListener('click',()=>{state.calendarDate=new Date();saveState();renderCalendar();});
-  document.getElementById('cal-add-task-btn').addEventListener('click',()=>openTaskModal(null,toDateStr(state.calendarDate)));
+  document.getElementById('cal-prev')?.addEventListener('click',()=>calNavigate(-1));
+  document.getElementById('cal-next')?.addEventListener('click',()=>calNavigate(1));
+  document.getElementById('cal-today-btn')?.addEventListener('click',()=>{state.calendarDate=new Date();saveState();renderCalendar();});
+  document.getElementById('cal-add-task-btn')?.addEventListener('click',()=>openTaskModal(null,toDateStr(state.calendarDate)));
   document.querySelectorAll('.vsw-btn').forEach(btn=>{
     btn.addEventListener('click',()=>{
       document.querySelectorAll('.vsw-btn').forEach(b=>b.classList.remove('active'));
@@ -1154,25 +1154,25 @@ function initEventListeners() {
   });
 
   // Widget image
-  document.querySelector('.hidden-file[data-widget="img1"]').addEventListener('change',async e=>{
+  document.querySelector('.hidden-file[data-widget="img1"]')?.addEventListener('change',async e=>{
     const file=e.target.files[0]; if(file) await handleWidgetImageUpload(file,'img1','widget-img-1','img-zone-1');
   });
 
   // Dark mode toggles
-  document.getElementById('dark-mode-toggle').addEventListener('click',toggleDarkMode);
-  document.getElementById('mobile-theme-btn').addEventListener('click',toggleDarkMode);
+  document.getElementById('dark-mode-toggle')?.addEventListener('click',toggleDarkMode);
+  document.getElementById('mobile-theme-btn')?.addEventListener('click',toggleDarkMode);
 
   // Notification banner
-  document.getElementById('notif-allow-btn').addEventListener('click',requestNotificationPermission);
-  document.getElementById('notif-deny-btn').addEventListener('click',()=>{
+  document.getElementById('notif-allow-btn')?.addEventListener('click',requestNotificationPermission);
+  document.getElementById('notif-deny-btn')?.addEventListener('click',()=>{
     document.getElementById('notif-banner').classList.add('hidden');
     localStorage.setItem('notif-dismissed','1');
   });
 
-  // Auth skip (use without account)
-  document.getElementById('auth-skip-btn').addEventListener('click',()=>{
-    hideAuthGate();
-    showToast('Yerel depolama kullanılıyor — veriler bu cihazda');
+  // Sign out (optional, only if element exists)
+  document.getElementById('sign-out-btn')?.addEventListener('click',async()=>{
+    if(auth) await auth.signOut();
+    showToast('Çıkış yapıldı');
   });
 
   // Mobile bottom nav
@@ -1181,7 +1181,7 @@ function initEventListeners() {
   });
 
   // Mobile FAB
-  document.getElementById('mobile-fab').addEventListener('click',()=>openTaskModal());
+  document.getElementById('mobile-fab')?.addEventListener('click',()=>openTaskModal());
 
   // Keyboard shortcuts
   document.addEventListener('keydown',e=>{
@@ -1190,8 +1190,8 @@ function initEventListeners() {
     if(e.key==='['&&!e.ctrlKey&&!e.metaKey&&!SB.isMobile()) SB.toggleCollapse();
   });
 
-  document.getElementById('task-title-input').addEventListener('keydown',e=>{if(e.key==='Enter')saveTask();});
-  document.getElementById('goal-title-input').addEventListener('keydown',e=>{if(e.key==='Enter')saveGoal();});
+  document.getElementById('task-title-input')?.addEventListener('keydown',e=>{if(e.key==='Enter')saveTask();});
+  document.getElementById('goal-title-input')?.addEventListener('keydown',e=>{if(e.key==='Enter')saveGoal();});
 }
 
 /* ============================================================
