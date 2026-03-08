@@ -1,402 +1,1254 @@
-<!DOCTYPE html>
-<html lang="tr" data-theme="light">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Planlayıcı — Günün, Senin Tarzında</title>
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="upgrades.css" />
-  <link rel="manifest" href="manifest.json" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Fraunces:ital,wght@0,300;0,500;1,300&display=swap" rel="stylesheet" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Planlayıcı" />
-  <meta name="theme-color" content="#18181b" />
-  <meta name="description" content="Görevler, hedefler ve takvim yönetimi için güzel bir kişisel planlayıcı." />
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-</head>
-<body>
+/* ============================================================
+   PLANNER APP — app.js
+   UPGRADES: Dark Mode · Recurring Tasks · Push Notifications · Firebase Sync
+   ============================================================ */
 
-  <!-- ===== GİRİŞ EKRANI ===== -->
-  <div id="auth-gate" class="auth-gate">
-    <div class="auth-card">
-      <div class="auth-brand"><span class="brand-icon">✦</span><span>Planlayıcı</span></div>
-      <h2 class="auth-title">Tekrar hoş geldin</h2>
-      <p class="auth-sub">Tüm cihazlarda senkronize etmek için giriş yap</p>
-      <div id="auth-error" class="auth-error hidden"></div>
-      <div class="form-group"><label>E-posta</label><input type="email" id="auth-email" placeholder="sen@ornek.com" /></div>
-      <div class="form-group"><label>Şifre</label><input type="password" id="auth-password" placeholder="••••••••" /></div>
-      <button class="btn-primary btn-full" id="auth-signin-btn">Giriş Yap</button>
-      <button class="btn-ghost btn-full" id="auth-signup-btn">Hesap Oluştur</button>
-      <div class="auth-divider"><span>veya</span></div>
-      <button class="btn-ghost btn-full" id="auth-google-btn">
-        <svg width="18" height="18" viewBox="0 0 24 24" style="margin-right:8px;vertical-align:middle"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-        Google ile Devam Et
-      </button>
-      <button class="btn-ghost btn-full" id="auth-skip-btn" style="margin-top:8px;font-size:13px;color:var(--text-muted)">Hesapsız kullan (yalnızca bu cihaz)</button>
+/* ============================================================
+   FIREBASE CONFIG
+   ⚠️  REPLACE the values below with YOUR Firebase project config.
+       Go to: console.firebase.google.com → Your Project
+       → Project Settings → Your apps → Web app → SDK setup
+   ============================================================ */
+const FIREBASE_CONFIG = {
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT.firebaseapp.com",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId:             "YOUR_APP_ID"
+};
+
+const FIREBASE_ENABLED = false; // Giriş ekranı kapatıldı
+
+/* ============================================================
+   1. STATE
+   ============================================================ */
+let state = {
+  tasks:             [],
+  goals:             { year: [], month: [], week: [] },
+  images:            { img1: null },
+  calendarView:      'month',
+  calendarDate:      new Date(),
+  weekPlannerOffset: 0,
+  sidebarCollapsed:  false,
+  darkMode:          false,
+  currentUser:       null,   // Firebase user object
+  useFirebase:       false   // true once user logs in with Firebase
+};
+
+let db   = null;  // Firestore instance
+let auth = null;  // Firebase Auth instance
+
+/* ============================================================
+   2. PERSISTENCE (localStorage fallback + Firebase)
+   ============================================================ */
+function saveState() {
+  try {
+    // Always save UI prefs locally
+    localStorage.setItem('planner_prefs', JSON.stringify({
+      sidebarCollapsed: state.sidebarCollapsed,
+      darkMode:         state.darkMode,
+      calendarView:     state.calendarView,
+      calendarDate:     state.calendarDate,
+      weekPlannerOffset:state.weekPlannerOffset
+    }));
+    // Save data locally as backup
+    localStorage.setItem('planner_data', JSON.stringify({
+      tasks:  state.tasks,
+      goals:  state.goals,
+      images: state.images
+    }));
+    // Sync to Firebase if logged in
+    if (state.useFirebase && state.currentUser && db) {
+      syncToFirebase();
+    }
+  } catch(e) { console.warn('Save failed:', e); }
+}
+
+function loadState() {
+  try {
+    const prefs = JSON.parse(localStorage.getItem('planner_prefs') || '{}');
+    const data  = JSON.parse(localStorage.getItem('planner_data')  || '{}');
+    state.sidebarCollapsed   = prefs.sidebarCollapsed  || false;
+    state.darkMode           = prefs.darkMode           || false;
+    state.calendarView       = prefs.calendarView       || 'month';
+    state.calendarDate       = prefs.calendarDate ? new Date(prefs.calendarDate) : new Date();
+    state.weekPlannerOffset  = prefs.weekPlannerOffset  || 0;
+    state.tasks              = data.tasks  || [];
+    state.goals              = data.goals  || { year: [], month: [], week: [] };
+    state.images             = data.images || { img1: null };
+  } catch(e) { console.warn('Load failed:', e); }
+}
+
+/* ============================================================
+   3. FIREBASE SETUP
+   ============================================================ */
+function initFirebase() {
+  if (!FIREBASE_ENABLED) return;
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    auth = firebase.auth();
+    db   = firebase.firestore();
+
+    // Google provider
+    const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+    // Auth state listener
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        state.currentUser = user;
+        state.useFirebase = true;
+        hideAuthGate();
+        setUserUI(user);
+        loadFromFirebase();
+        showToast('☁️ Bulutla senkronize edildi');
+      } else {
+        state.currentUser = null;
+        state.useFirebase = false;
+        setUserUI(null);
+      }
+    });
+
+    // Sign in with email
+    document.getElementById('auth-signin-btn').addEventListener('click', async () => {
+      const email = document.getElementById('auth-email').value.trim();
+      const pass  = document.getElementById('auth-password').value;
+      if (!email || !pass) return showAuthError('Please fill in both fields.');
+      try {
+        await auth.signInWithEmailAndPassword(email, pass);
+      } catch(e) { showAuthError(friendlyAuthError(e.code)); }
+    });
+
+    // Sign up with email
+    document.getElementById('auth-signup-btn').addEventListener('click', async () => {
+      const email = document.getElementById('auth-email').value.trim();
+      const pass  = document.getElementById('auth-password').value;
+      if (!email || !pass) return showAuthError('Please fill in both fields.');
+      if (pass.length < 6) return showAuthError('Password must be at least 6 characters.');
+      try {
+        await auth.createUserWithEmailAndPassword(email, pass);
+      } catch(e) { showAuthError(friendlyAuthError(e.code)); }
+    });
+
+    // Google sign in
+    document.getElementById('auth-google-btn').addEventListener('click', async () => {
+      try { await auth.signInWithPopup(googleProvider); }
+      catch(e) { showAuthError(friendlyAuthError(e.code)); }
+    });
+
+    // Sign out
+    document.getElementById('sign-out-btn').addEventListener('click', async () => {
+      await auth.signOut();
+      state.useFirebase = false;
+      showToast('Çıkış yapıldı');
+      showAuthGate();
+    });
+
+  } catch(e) { console.warn('Firebase init failed:', e); }
+}
+
+function friendlyAuthError(code) {
+  const map = {
+    'auth/user-not-found':    'No account found with that email.',
+    'auth/wrong-password':    'Incorrect password.',
+    'auth/email-already-in-use': 'An account with this email already exists.',
+    'auth/invalid-email':     'Please enter a valid email address.',
+    'auth/weak-password':     'Password should be at least 6 characters.',
+    'auth/popup-closed-by-user': 'Sign-in popup was closed.',
+    'auth/network-request-failed': 'Network error. Please check your connection.',
+  };
+  return map[code] || 'Something went wrong. Please try again.';
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+function showAuthGate()  { document.getElementById('auth-gate').classList.remove('hidden'); }
+function hideAuthGate()  { document.getElementById('auth-gate').classList.add('hidden'); }
+
+function setUserUI(user) {
+  const nameEl   = document.getElementById('user-name');
+  const avatarEl = document.getElementById('user-avatar');
+  if (user) {
+    const name = user.displayName || user.email?.split('@')[0] || 'User';
+    nameEl.textContent   = name;
+    avatarEl.textContent = name[0].toUpperCase();
+  } else {
+    nameEl.textContent   = 'Guest';
+    avatarEl.textContent = '?';
+  }
+}
+
+/* ── Firebase sync ── */
+async function syncToFirebase() {
+  if (!db || !state.currentUser) return;
+  try {
+    const uid = state.currentUser.uid;
+    await db.collection('users').doc(uid).set({
+      tasks:  state.tasks,
+      goals:  state.goals,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  } catch(e) { console.warn('Firebase sync failed:', e); }
+}
+
+async function loadFromFirebase() {
+  if (!db || !state.currentUser) return;
+  try {
+    const uid  = state.currentUser.uid;
+    const doc  = await db.collection('users').doc(uid).get();
+    if (doc.exists) {
+      const data = doc.data();
+      if (data.tasks) state.tasks = data.tasks;
+      if (data.goals) state.goals = data.goals;
+      saveState();
+      refreshCurrentView();
+    }
+  } catch(e) { console.warn('Firebase load failed:', e); }
+}
+
+/* ============================================================
+   4. DARK MODE
+   ============================================================ */
+function applyTheme(dark) {
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  const icon  = document.getElementById('theme-icon');
+  const label = document.getElementById('theme-label');
+  const mBtn  = document.getElementById('mobile-theme-btn');
+
+  if (dark) {
+    // Moon icon
+    icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+    if (label) label.textContent = 'Karanlık Tema';
+    if (mBtn)  mBtn.textContent  = '☀️';
+  } else {
+    // Sun icon
+    icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+    if (label) label.textContent = 'Açık Tema';
+    if (mBtn)  mBtn.textContent  = '🌙';
+  }
+}
+
+function toggleDarkMode() {
+  state.darkMode = !state.darkMode;
+  applyTheme(state.darkMode);
+  saveState();
+  showToast(state.darkMode ? '🌙 Karanlık tema açık' : '☀️ Açık tema açık');
+}
+
+/* ============================================================
+   5. PUSH NOTIFICATIONS
+   ============================================================ */
+let notificationPermission = 'default';
+const scheduledNotifications = new Map(); // taskId → timeoutId
+
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) return;
+  const result = await Notification.requestPermission();
+  notificationPermission = result;
+  localStorage.setItem('notif-perm', result);
+  if (result === 'granted') {
+    showToast('🔔 Hatırlatıcılar açıldı!');
+    scheduleAllReminders();
+  }
+  document.getElementById('notif-banner').classList.add('hidden');
+}
+
+function scheduleAllReminders() {
+  // Clear all existing timeouts
+  scheduledNotifications.forEach(id => clearTimeout(id));
+  scheduledNotifications.clear();
+
+  if (notificationPermission !== 'granted') return;
+
+  state.tasks.forEach(task => {
+    if (!task.completed && task.reminder && task.reminder !== 'none' && task.date && task.time) {
+      scheduleReminder(task);
+    }
+  });
+}
+
+function scheduleReminder(task) {
+  if (notificationPermission !== 'granted') return;
+  if (!task.date || !task.time || !task.reminder || task.reminder === 'none') return;
+
+  const taskDate  = new Date(`${task.date}T${task.time}`);
+  const fireAt    = new Date(taskDate.getTime() - (parseInt(task.reminder) * 60000));
+  const msUntil   = fireAt.getTime() - Date.now();
+
+  if (msUntil <= 0) return; // already passed
+
+  // Clear existing if any
+  if (scheduledNotifications.has(task.id)) {
+    clearTimeout(scheduledNotifications.get(task.id));
+  }
+
+  const timeoutId = setTimeout(() => {
+    if (Notification.permission === 'granted') {
+      new Notification('📋 ' + task.title, {
+        body: task.description || `Reminder for your task at ${task.time}`,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-96.png',
+        tag: task.id,
+        requireInteraction: false,
+        silent: false
+      });
+    }
+  }, msUntil);
+
+  scheduledNotifications.set(task.id, timeoutId);
+}
+
+function cancelReminder(taskId) {
+  if (scheduledNotifications.has(taskId)) {
+    clearTimeout(scheduledNotifications.get(taskId));
+    scheduledNotifications.delete(taskId);
+  }
+}
+
+/* ============================================================
+   6. RECURRING TASKS
+   ============================================================ */
+
+/**
+ * Given a base task with recurrence info, expand it into
+ * concrete occurrences within [startDate, endDate].
+ * Returns array of virtual task objects (not saved to state).
+ */
+function expandRecurringTask(task, viewStart, viewEnd) {
+  if (!task.recurrence || task.recurrence === 'none') return [task];
+
+  const occurrences = [];
+  const recEnd = task.recurrenceEnd ? new Date(task.recurrenceEnd) : addDays(new Date(), 365);
+  let current   = fromDateStr(task.date);
+  const vsDate  = viewStart instanceof Date ? viewStart : fromDateStr(viewStart);
+  const veDate  = viewEnd   instanceof Date ? viewEnd   : fromDateStr(viewEnd);
+
+  while (current <= recEnd && current <= veDate) {
+    if (current >= vsDate) {
+      occurrences.push({
+        ...task,
+        date:         toDateStr(current),
+        _isRecurrence: true,
+        _baseId:      task.id
+      });
+    }
+    // Advance by recurrence frequency
+    switch (task.recurrence) {
+      case 'daily':   current = addDays(current, 1);                                      break;
+      case 'weekly':  current = addDays(current, 7);                                      break;
+      case 'monthly': current = new Date(current.getFullYear(), current.getMonth()+1, current.getDate()); break;
+      case 'yearly':  current = new Date(current.getFullYear()+1, current.getMonth(), current.getDate()); break;
+      default:        break;
+    }
+  }
+  return occurrences;
+}
+
+/**
+ * Get all tasks (including expanded recurring) for a given date string.
+ */
+function getTasksForDate(dateStr) {
+  const date    = fromDateStr(dateStr);
+  const allTasks = [];
+
+  state.tasks.forEach(task => {
+    if (!task.recurrence || task.recurrence === 'none') {
+      if (task.date === dateStr) allTasks.push(task);
+    } else {
+      const occurrences = expandRecurringTask(task, date, date);
+      allTasks.push(...occurrences);
+    }
+  });
+
+  return allTasks.sort((a,b) => (a.time||'').localeCompare(b.time||''));
+}
+
+/**
+ * Get all tasks for a date range (for calendar / week views).
+ */
+function getTasksForRange(startDate, endDate) {
+  const allTasks = [];
+  state.tasks.forEach(task => {
+    if (!task.recurrence || task.recurrence === 'none') {
+      const d = fromDateStr(task.date);
+      if (d >= startDate && d <= endDate) allTasks.push(task);
+    } else {
+      allTasks.push(...expandRecurringTask(task, startDate, endDate));
+    }
+  });
+  return allTasks;
+}
+
+/* ============================================================
+   7. DATE HELPERS
+   ============================================================ */
+const DAYS   = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+const DAYS_S = ['Paz','Pzt','Sal','Çar','Per','Cum','Cmt'];
+const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+
+const uid       = () => '_' + Math.random().toString(36).slice(2,9);
+const today     = () => toDateStr(new Date());
+const toDateStr = d  => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const fromDateStr = s => { if(!s) return null; const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
+const addDays   = (d,n) => { const c=new Date(d); c.setDate(c.getDate()+n); return c; };
+const isSameDay = (a,b) => a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+
+function getWeekStart(d) {
+  const day=d.getDay(); return addDays(d, day===0?-6:1-day);
+}
+function formatDisplayDate(d) { return `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`; }
+function formatShortDate(d)   { return `${MONTHS[d.getMonth()]} ${d.getDate()}`; }
+
+/* ============================================================
+   8. SIDEBAR
+   ============================================================ */
+const MOBILE_BP = 900;
+const SB = {
+  el: null, main: null, overlay: null, toggle: null, mobileBtn: null,
+  isMobile: () => window.innerWidth <= MOBILE_BP,
+
+  init() {
+    this.el        = document.getElementById('sidebar');
+    this.main      = document.getElementById('main-content');
+    this.overlay   = document.getElementById('sidebar-overlay');
+    this.toggle    = document.getElementById('sidebar-toggle');
+    this.mobileBtn = document.getElementById('mobile-menu-btn');
+
+    if (!this.isMobile()) {
+      if (state.sidebarCollapsed) {
+        this.el.classList.add('collapsed');
+        document.body.classList.add('sidebar-collapsed');
+      } else {
+        this.el.classList.remove('collapsed');
+        document.body.classList.remove('sidebar-collapsed');
+      }
+    }
+
+    this.toggle.addEventListener('click', e => {
+      e.stopPropagation();
+      this.isMobile() ? this.openMobile() : this.toggleCollapse();
+    });
+    this.mobileBtn.addEventListener('click', () => this.openMobile());
+    this.overlay.addEventListener('click', () => this.closeMobile());
+
+    window.addEventListener('resize', () => {
+      if (!this.isMobile()) {
+        this.closeMobile();
+        this.el.classList.toggle('collapsed', state.sidebarCollapsed);
+        document.body.classList.toggle('sidebar-collapsed', state.sidebarCollapsed);
+      } else {
+        this.el.classList.remove('collapsed');
+        document.body.classList.remove('sidebar-collapsed');
+      }
+    });
+  },
+
+  toggleCollapse() {
+    const collapsed = this.el.classList.toggle('collapsed');
+    document.body.classList.toggle('sidebar-collapsed', collapsed);
+    state.sidebarCollapsed = collapsed;
+    saveState();
+  },
+
+  openMobile() {
+    this.el.classList.add('mobile-open');
+    this.overlay.classList.add('visible');
+    document.body.classList.add('mobile-open');
+    document.body.style.overflow = 'hidden';
+  },
+
+  closeMobile() {
+    this.el.classList.remove('mobile-open');
+    this.overlay.classList.remove('visible');
+    document.body.classList.remove('mobile-open');
+    document.body.style.overflow = '';
+  }
+};
+
+/* ============================================================
+   9. NAVIGATION
+   ============================================================ */
+function showView(viewId) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  document.getElementById(`view-${viewId}`)?.classList.add('active');
+  document.querySelector(`.nav-item[data-view="${viewId}"]`)?.classList.add('active');
+
+  // Sync bottom nav
+  document.querySelectorAll('.bottom-nav-item').forEach(item => {
+    const matches = item.dataset.view === viewId ||
+      (['month-goals','week-goals'].includes(viewId) && item.dataset.view === 'year-goals');
+    item.classList.toggle('active', matches);
+  });
+
+  if (SB.isMobile()) SB.closeMobile();
+  renderView(viewId);
+}
+
+function renderView(viewId) {
+  switch(viewId) {
+    case 'dashboard':   renderDashboard();   break;
+    case 'year-goals':  renderGoals('year'); break;
+    case 'month-goals': renderGoals('month');break;
+    case 'week-goals':  renderGoals('week'); break;
+    case 'week-planner':renderWeekPlanner(); break;
+    case 'calendar':    renderCalendar();    break;
+  }
+}
+
+function refreshCurrentView() {
+  const active = document.querySelector('.nav-item.active');
+  if (active) renderView(active.dataset.view);
+}
+
+/* ============================================================
+   10. DASHBOARD
+   ============================================================ */
+function renderDashboard() {
+  const hour  = new Date().getHours();
+  document.getElementById('greeting-time').textContent = hour<12?'sabahlar':hour<18?'iyi günler':'iyi akşamlar';
+  document.getElementById('full-date-display').textContent = formatDisplayDate(new Date());
+
+  // Today's tasks (including recurring)
+  const todayStr   = today();
+  const todayTasks = getTasksForDate(todayStr);
+  const container  = document.getElementById('dashboard-today-tasks');
+  document.getElementById('today-task-count').textContent = todayTasks.length;
+
+  container.innerHTML = '';
+  if (!todayTasks.length) {
+    container.innerHTML = '<p class="empty-state">No tasks for today. Add one!</p>';
+  } else {
+    todayTasks.forEach(t => container.appendChild(createTaskCard(t)));
+  }
+
+  // Weekly progress
+  const ws        = getWeekStart(new Date());
+  const weekTasks = getTasksForRange(ws, addDays(ws,6));
+  const wc        = weekTasks.filter(t => t.completed).length;
+  const pct       = weekTasks.length ? Math.round((wc/weekTasks.length)*100) : 0;
+  const circ      = 2*Math.PI*30;
+  document.getElementById('weekly-ring').style.strokeDashoffset = circ - (pct/100)*circ;
+  document.getElementById('weekly-pct').textContent     = pct + '%';
+  document.getElementById('weekly-caption').textContent = `${wc} of ${weekTasks.length} tasks completed this week`;
+
+  // Weekly goals
+  const wgEl = document.getElementById('dashboard-week-goals');
+  const wg   = state.goals.week.slice(0,4);
+  if (!wg.length) { wgEl.innerHTML='<p class="empty-state">No weekly goals set.</p>'; }
+  else {
+    wgEl.innerHTML = wg.map(g=>`
+      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;">
+        <input type="checkbox" ${g.completed?'checked':''} style="margin-top:3px;accent-color:var(--accent);cursor:pointer;"
+          onchange="toggleGoal('week','${g.id}',this.checked)" />
+        <span style="font-size:14px;${g.completed?'text-decoration:line-through;color:var(--text-muted)':''}">${escHtml(g.title)}</span>
+      </div>`).join('');
+  }
+
+  restoreWidgetImages();
+}
+
+function restoreWidgetImages() {
+  if (state.images.img1) {
+    document.getElementById('widget-img-1').src = state.images.img1;
+    document.getElementById('widget-img-1').classList.remove('hidden');
+    const p = document.getElementById('img-zone-1').querySelector('p');
+    if (p) p.style.display='none';
+  }
+}
+
+/* ============================================================
+   11. TASK CARDS
+   ============================================================ */
+function createTaskCard(task) {
+  const card = document.createElement('div');
+  card.className = `task-card${task.completed?' completed':''}`;
+  card.style.borderLeftColor = task.color || '#b5d5c5';
+  card.dataset.taskId = task.id;
+  card.draggable = !task._isRecurrence;
+
+  const timeStr = task.time ? `🕐 ${task.time}` : '';
+  const recStr  = task.recurrence && task.recurrence !== 'none'
+    ? `<span class="recurrence-badge">🔁 ${task.recurrence}</span>` : '';
+  const imgHtml = task.image ? `<img src="${task.image}" class="task-card-img" alt="" />` : '';
+
+  card.innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:8px;">
+      <input type="checkbox" class="task-check" ${task.completed?'checked':''} />
+      <div style="flex:1;min-width:0;">
+        <div class="task-card-title">${escHtml(task.title)}</div>
+        <div class="task-card-meta">${timeStr?`<span>${timeStr}</span>`:''}${recStr}</div>
+        ${imgHtml}
+      </div>
     </div>
-  </div>
+    <div class="task-card-actions">
+      <button class="task-card-btn" title="Edit">✏️</button>
+      <button class="task-card-btn delete" title="Delete">🗑</button>
+    </div>`;
 
-  <!-- ===== BİLDİRİM BANNER ===== -->
-  <div id="notif-banner" class="notif-banner hidden">
-    <span>🔔 Görevler için hatırlatıcı açılsın mı?</span>
-    <div style="display:flex;gap:8px">
-      <button class="btn-primary" id="notif-allow-btn" style="padding:6px 14px;font-size:13px">İzin Ver</button>
-      <button class="btn-ghost" id="notif-deny-btn" style="padding:6px 14px;font-size:13px">Şimdi değil</button>
-    </div>
-  </div>
+  card.querySelector('.task-check').addEventListener('change', e => {
+    e.stopPropagation();
+    // For recurring instances, toggle the base task
+    toggleTask(task._baseId || task.id, e.target.checked);
+  });
+  card.querySelector('.task-card-btn:not(.delete)').addEventListener('click', e => {
+    e.stopPropagation(); openTaskModal(task._baseId || task.id);
+  });
+  card.querySelector('.task-card-btn.delete').addEventListener('click', e => {
+    e.stopPropagation(); deleteTask(task._baseId || task.id);
+  });
+  card.addEventListener('click', () => openDetailModal(task._baseId || task.id));
 
-  <!-- ===== TOAST ===== -->
-  <div id="toast" class="toast hidden"></div>
+  if (!task._isRecurrence) {
+    card.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('taskId', task.id);
+      setTimeout(() => card.classList.add('dragging'), 0);
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+  }
 
-  <!-- ===== MÜZİK ÇALARI ===== -->
-  <div id="music-player" class="music-player hidden">
-    <div class="music-player-inner">
-      <div class="music-info">
-        <div class="music-equalizer" id="music-eq">
-          <span></span><span></span><span></span><span></span>
+  return card;
+}
+
+/* ============================================================
+   12. TASK CRUD
+   ============================================================ */
+function toggleTask(id, completed) {
+  const t = state.tasks.find(t => t.id===id);
+  if (t) { t.completed = completed; saveState(); refreshCurrentView(); }
+}
+
+function deleteTask(id) {
+  cancelReminder(id);
+  state.tasks = state.tasks.filter(t => t.id!==id);
+  saveState(); refreshCurrentView();
+}
+
+/* ============================================================
+   13. TASK MODAL
+   ============================================================ */
+let taskModalImage = null;
+
+function openTaskModal(editId=null, presetDate=null, presetTime=null) {
+  taskModalImage = null;
+  const g = id => document.getElementById(id);
+
+  g('task-title-input').value      = '';
+  g('task-desc-input').value       = '';
+  g('task-date-input').value       = presetDate || today();
+  g('task-time-input').value       = presetTime || '';
+  g('task-recurrence-input').value = 'none';
+  g('task-recurrence-end').value   = '';
+  g('task-reminder-input').value   = 'none';
+  g('task-edit-id').value          = '';
+  g('task-img-preview').src        = '';
+  g('task-img-preview').classList.add('hidden');
+  g('task-img-label').textContent  = '📎 Click to upload image';
+
+  document.querySelectorAll('.color-dot').forEach(d=>d.classList.remove('selected'));
+  document.querySelector('.color-dot[data-color="#b5d5c5"]').classList.add('selected');
+
+  if (editId) {
+    const task = state.tasks.find(t=>t.id===editId);
+    if (!task) return;
+    g('task-modal-title').textContent     = 'Edit Task';
+    g('task-title-input').value           = task.title;
+    g('task-desc-input').value            = task.description||'';
+    g('task-date-input').value            = task.date;
+    g('task-time-input').value            = task.time||'';
+    g('task-recurrence-input').value      = task.recurrence||'none';
+    g('task-recurrence-end').value        = task.recurrenceEnd||'';
+    g('task-reminder-input').value        = task.reminder||'none';
+    g('task-edit-id').value               = task.id;
+    if (task.color) {
+      document.querySelectorAll('.color-dot').forEach(d=>d.classList.remove('selected'));
+      document.querySelector(`.color-dot[data-color="${task.color}"]`)?.classList.add('selected');
+    }
+    if (task.image) {
+      taskModalImage = task.image;
+      g('task-img-preview').src = task.image;
+      g('task-img-preview').classList.remove('hidden');
+      g('task-img-label').textContent = '📎 Image attached';
+    }
+  } else {
+    g('task-modal-title').textContent = 'New Task';
+  }
+
+  document.getElementById('task-modal-overlay').classList.remove('hidden');
+  g('task-title-input').focus();
+}
+
+function closeTaskModal() {
+  document.getElementById('task-modal-overlay').classList.add('hidden');
+  taskModalImage = null;
+}
+
+function saveTask() {
+  const g     = id => document.getElementById(id);
+  const title = g('task-title-input').value.trim();
+  const date  = g('task-date-input').value;
+  if (!title) { g('task-title-input').focus(); return; }
+  if (!date)  { g('task-date-input').focus();  return; }
+
+  const color      = document.querySelector('.color-dot.selected')?.dataset.color || '#b5d5c5';
+  const recurrence = g('task-recurrence-input').value;
+  const reminder   = g('task-reminder-input').value;
+  const editId     = g('task-edit-id').value;
+
+  if (editId) {
+    const task = state.tasks.find(t=>t.id===editId);
+    if (task) {
+      Object.assign(task, {
+        title, description: g('task-desc-input').value.trim(),
+        date, time: g('task-time-input').value,
+        color, recurrence, reminder,
+        recurrenceEnd: g('task-recurrence-end').value || null,
+        image: taskModalImage || task.image
+      });
+      cancelReminder(task.id);
+      scheduleReminder(task);
+    }
+  } else {
+    const newTask = {
+      id: uid(), title,
+      description: g('task-desc-input').value.trim(),
+      date, time: g('task-time-input').value,
+      color, recurrence, reminder,
+      recurrenceEnd: g('task-recurrence-end').value || null,
+      completed: false,
+      image: taskModalImage || null,
+      createdAt: Date.now()
+    };
+    state.tasks.push(newTask);
+    scheduleReminder(newTask);
+  }
+
+  saveState(); closeTaskModal(); refreshCurrentView();
+  showToast('✅ Görev kaydedildi');
+}
+
+/* ============================================================
+   14. GOAL MODAL & CRUD
+   ============================================================ */
+function openGoalModal(type, editId=null) {
+  const labels = {year:'Year Goal',month:'Month Goal',week:'Week Goal'};
+  document.getElementById('goal-title-input').value       = '';
+  document.getElementById('goal-desc-input').value        = '';
+  document.getElementById('goal-type-input').value        = type;
+  document.getElementById('goal-edit-id').value           = '';
+  document.getElementById('goal-modal-title').textContent =
+    editId ? `Edit ${labels[type]}` : `New ${labels[type]}`;
+
+  if (editId) {
+    const g = state.goals[type].find(g=>g.id===editId);
+    if (g) {
+      document.getElementById('goal-title-input').value = g.title;
+      document.getElementById('goal-desc-input').value  = g.description||'';
+      document.getElementById('goal-edit-id').value     = editId;
+    }
+  }
+  document.getElementById('goal-modal-overlay').classList.remove('hidden');
+  document.getElementById('goal-title-input').focus();
+}
+
+function closeGoalModal() { document.getElementById('goal-modal-overlay').classList.add('hidden'); }
+
+function saveGoal() {
+  const title  = document.getElementById('goal-title-input').value.trim();
+  const type   = document.getElementById('goal-type-input').value;
+  const editId = document.getElementById('goal-edit-id').value;
+  if (!title) { document.getElementById('goal-title-input').focus(); return; }
+
+  if (editId) {
+    const g = state.goals[type].find(g=>g.id===editId);
+    if (g) { g.title=title; g.description=document.getElementById('goal-desc-input').value.trim(); }
+  } else {
+    state.goals[type].push({ id:uid(), title, description:document.getElementById('goal-desc-input').value.trim(), completed:false, createdAt:Date.now() });
+  }
+  saveState(); closeGoalModal(); renderGoals(type);
+  showToast('🎯 Hedef kaydedildi');
+}
+
+function toggleGoal(type, id, completed) {
+  const g = state.goals[type].find(g=>g.id===id);
+  if (g) { g.completed=completed; saveState(); }
+  const active = document.querySelector('.nav-item.active')?.dataset.view;
+  if (active===`${type}-goals`) renderGoals(type);
+  if (active==='dashboard')     renderDashboard();
+}
+
+function deleteGoal(type, id) {
+  state.goals[type] = state.goals[type].filter(g=>g.id!==id);
+  saveState(); renderGoals(type);
+}
+
+/* ============================================================
+   15. GOALS RENDER
+   ============================================================ */
+function renderGoals(type) {
+  const container = document.getElementById(`${type}-goals-list`);
+  if (!container) return;
+  const now = new Date();
+  if (type==='year')  document.getElementById('current-year-label').textContent  = now.getFullYear();
+  if (type==='month') document.getElementById('current-month-label').textContent = MONTHS[now.getMonth()];
+
+  const goals = state.goals[type];
+  if (!goals.length) { container.innerHTML='<p class="empty-state full-width">No goals yet. Start adding some!</p>'; return; }
+
+  container.innerHTML='';
+  goals.forEach(goal => {
+    const card = document.createElement('div');
+    card.className='goal-card';
+    card.innerHTML=`
+      <div class="goal-card-top">
+        <input type="checkbox" class="goal-check" ${goal.completed?'checked':''}
+          onchange="toggleGoal('${type}','${goal.id}',this.checked)" />
+        <div style="flex:1">
+          <div class="goal-title${goal.completed?' done':''}">${escHtml(goal.title)}</div>
+          ${goal.description?`<div class="goal-desc">${escHtml(goal.description)}</div>`:''}
         </div>
-        <div class="music-text">
-          <div class="music-track-name" id="music-track-name">Lo-fi Chill Beats</div>
-          <div class="music-track-sub" id="music-track-sub">Odak modu 🎧</div>
-        </div>
       </div>
-      <div class="music-controls">
-        <button class="music-btn" id="music-prev" title="Önceki">⏮</button>
-        <button class="music-btn music-btn-play" id="music-play-btn" title="Oynat">▶</button>
-        <button class="music-btn" id="music-next" title="Sonraki">⏭</button>
+      <div class="goal-card-footer">
+        <button class="btn-ghost" style="padding:6px 14px;font-size:12px;" onclick="openGoalModal('${type}','${goal.id}')">Edit</button>
+        <button class="btn-ghost" style="padding:6px 14px;font-size:12px;color:var(--danger);" onclick="deleteGoal('${type}','${goal.id}')">Delete</button>
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+/* ============================================================
+   16. WEEK PLANNER
+   ============================================================ */
+function renderWeekPlanner() {
+  const ws = addDays(getWeekStart(new Date()), state.weekPlannerOffset*7);
+  const we = addDays(ws, 6);
+  document.getElementById('week-planner-range').textContent =
+    `${formatShortDate(ws)} – ${formatShortDate(we)}, ${we.getFullYear()}`;
+
+  const board = document.getElementById('week-board');
+  board.innerHTML='';
+  const now=new Date();
+
+  for (let i=0;i<7;i++) {
+    const day=addDays(ws,i), dateStr=toDateStr(day), isToday=isSameDay(day,now);
+    const col=document.createElement('div');
+    col.className=`week-col${isToday?' today':''}`;
+    col.dataset.date=dateStr;
+    col.innerHTML=`
+      <div class="week-col-header">
+        <div class="week-col-day">${DAYS_S[day.getDay()]}</div>
+        <div class="week-col-date">${day.getDate()}</div>
       </div>
-      <div class="music-vol-wrap">
-        <span style="font-size:13px">🔊</span>
-        <input type="range" id="music-vol" min="0" max="1" step="0.05" value="0.5" class="music-vol-slider" />
-      </div>
-      <button class="music-close-btn" id="music-close-btn" title="Kapat">✕</button>
-    </div>
-  </div>
+      <div class="week-tasks"></div>`;
 
-  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+    const tasksDiv=col.querySelector('.week-tasks');
+    getTasksForDate(dateStr).forEach(t=>tasksDiv.appendChild(createTaskCard(t)));
 
-  <!-- ========== KENAR ÇUBUĞU ========== -->
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-top">
-      <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Menüyü aç/kapat">
-        <span class="h-line"></span><span class="h-line"></span><span class="h-line"></span>
-      </button>
-      <div class="sidebar-brand">
-        <span class="brand-icon">✦</span>
-        <span class="brand-name">Planlayıcı</span>
-      </div>
-    </div>
+    const addBtn=document.createElement('button');
+    addBtn.className='add-task-inline'; addBtn.textContent='+ Add';
+    addBtn.addEventListener('click',()=>openTaskModal(null,dateStr));
+    col.appendChild(addBtn);
 
-    <nav class="sidebar-nav" role="navigation">
-      <a href="#" class="nav-item active" data-view="dashboard" data-tooltip="Ana Sayfa">
-        <span class="nav-indicator"></span>
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
-        <span class="nav-label">Ana Sayfa</span>
-      </a>
-      <a href="#" class="nav-item" data-view="year-goals" data-tooltip="Yıllık Hedefler">
-        <span class="nav-indicator"></span>
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
-        <span class="nav-label">Yıllık Hedefler</span>
-      </a>
-      <a href="#" class="nav-item" data-view="month-goals" data-tooltip="Aylık Hedefler">
-        <span class="nav-indicator"></span>
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><rect x="7" y="14" width="3" height="3" rx="0.5" fill="currentColor" stroke="none"/></svg></span>
-        <span class="nav-label">Aylık Hedefler</span>
-      </a>
-      <a href="#" class="nav-item" data-view="week-goals" data-tooltip="Haftalık Hedefler">
-        <span class="nav-indicator"></span>
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg></span>
-        <span class="nav-label">Haftalık Hedefler</span>
-      </a>
-      <a href="#" class="nav-item" data-view="week-planner" data-tooltip="Hafta Planlayıcı">
-        <span class="nav-indicator"></span>
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg></span>
-        <span class="nav-label">Hafta Planlayıcı</span>
-      </a>
-      <a href="#" class="nav-item" data-view="calendar" data-tooltip="Takvim">
-        <span class="nav-indicator"></span>
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="15" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="15" r="1" fill="currentColor" stroke="none"/><circle cx="16" cy="15" r="1" fill="currentColor" stroke="none"/></svg></span>
-        <span class="nav-label">Takvim</span>
-      </a>
-    </nav>
+    col.addEventListener('dragover', e=>{e.preventDefault();col.classList.add('drag-over');});
+    col.addEventListener('dragleave',()=>col.classList.remove('drag-over'));
+    col.addEventListener('drop',e=>{e.preventDefault();col.classList.remove('drag-over');moveTaskToDate(e.dataTransfer.getData('taskId'),dateStr);});
+    board.appendChild(col);
+  }
+}
 
-    <div class="sidebar-footer">
-      <button class="dark-mode-toggle" id="music-toggle-btn" data-tooltip="Odak Müziği">
-        <span class="nav-icon" style="font-size:17px">🎵</span>
-        <span class="nav-label">Odak Müziği</span>
-      </button>
-      <button class="dark-mode-toggle" id="dark-mode-toggle" data-tooltip="Tema Değiştir">
-        <span class="nav-icon" id="theme-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-        </span>
-        <span class="nav-label" id="theme-label">Açık Tema</span>
-      </button>
-      <div class="sidebar-user" id="sidebar-user">
-        <div class="user-avatar" id="user-avatar">?</div>
-        <div class="user-info">
-          <span class="user-name" id="user-name">Misafir</span>
-          <button class="sign-out-btn" id="sign-out-btn">Çıkış yap</button>
-        </div>
-      </div>
-      <div class="sidebar-date-block" data-tooltip="Bugün">
-        <span class="sidebar-date-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
-        <span class="sidebar-date-text" id="sidebar-date">Bugün</span>
-      </div>
-    </div>
-  </aside>
+function moveTaskToDate(taskId, newDate, newTime) {
+  const t=state.tasks.find(t=>t.id===taskId);
+  if (t) {
+    t.date=newDate;
+    if (newTime!==undefined) t.time=newTime;
+    cancelReminder(t.id);
+    scheduleReminder(t);
+    saveState(); refreshCurrentView();
+  }
+}
 
-  <!-- ========== ANA İÇERİK ========== -->
-  <main class="main-content" id="main-content">
+/* ============================================================
+   17. CALENDAR
+   ============================================================ */
+function renderCalendar() {
+  const label=document.getElementById('cal-current-label');
+  const container=document.getElementById('calendar-container');
+  const d=state.calendarDate;
+  switch(state.calendarView) {
+    case 'month': renderMonthView(d,container,label);  break;
+    case 'week':  renderWeekView(d,container,label);   break;
+    case 'day':   renderDayView(d,container,label);    break;
+    case 'year':  renderYearView(d,container,label);   break;
+  }
+}
 
-    <div class="mobile-topbar">
-      <button class="mobile-menu-btn" id="mobile-menu-btn"><span class="h-line"></span><span class="h-line"></span><span class="h-line"></span></button>
-      <span class="mobile-brand">✦ Planlayıcı</span>
-      <div style="display:flex;gap:6px">
-        <button class="mobile-theme-btn" id="music-toggle-btn-mobile">🎵</button>
-        <button class="mobile-theme-btn" id="mobile-theme-btn">🌙</button>
-      </div>
-    </div>
+function renderMonthView(d,container,label) {
+  label.textContent=`${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  container.innerHTML='';
+  const grid=document.createElement('div');
+  grid.className='cal-month-grid';
+  DAYS_S.forEach(n=>{const el=document.createElement('div');el.className='cal-day-name';el.textContent=n;grid.appendChild(el);});
 
-    <!-- ANA SAYFA -->
-    <section class="view active" id="view-dashboard">
-      <header class="view-header">
-        <div>
-          <h1 class="view-title">İyi <span id="greeting-time">sabahlar</span> ☀️</h1>
-          <p class="view-subtitle" id="full-date-display">Yükleniyor...</p>
-        </div>
-        <button class="btn-primary" id="quick-add-btn">+ Hızlı Görev Ekle</button>
-      </header>
-      <div class="dashboard-grid">
-        <div class="widget widget-tall">
-          <div class="widget-header"><h3>Bugünün Görevleri</h3><span class="badge" id="today-task-count">0</span></div>
-          <div class="widget-body" id="dashboard-today-tasks"><p class="empty-state">Bugün için görev yok. Hemen ekle!</p></div>
-        </div>
-        <div class="widget">
-          <div class="widget-header"><h3>Haftalık İlerleme</h3></div>
-          <div class="widget-body">
-            <div class="progress-ring-container">
-              <svg class="progress-ring" viewBox="0 0 80 80">
-                <circle class="ring-bg" cx="40" cy="40" r="30"/>
-                <circle class="ring-fill" id="weekly-ring" cx="40" cy="40" r="30"/>
-              </svg>
-              <div class="progress-label"><span id="weekly-pct">0%</span><small>tamamlandı</small></div>
-            </div>
-            <p class="progress-caption" id="weekly-caption">Bu hafta 0 görevden 0'ı tamamlandı</p>
-          </div>
-        </div>
-        <div class="widget widget-image">
-          <div class="widget-header">
-            <h3>Görsel Pano</h3>
-            <label class="icon-btn upload-label" title="Görsel yükle">📎<input type="file" accept="image/*" class="hidden-file" data-widget="img1" /></label>
-          </div>
-          <div class="image-drop-zone" id="img-zone-1">
-            <p>📎 tıkla ve görsel ekle</p>
-            <img id="widget-img-1" src="" alt="" class="widget-img hidden" />
-          </div>
-        </div>
-        <div class="widget">
-          <div class="widget-header"><h3>Bu Haftanın Hedefleri</h3></div>
-          <div class="widget-body" id="dashboard-week-goals"><p class="empty-state">Haftalık hedef belirlenmedi.</p></div>
-        </div>
-      </div>
-    </section>
+  const firstDay=new Date(d.getFullYear(),d.getMonth(),1);
+  const lastDay=new Date(d.getFullYear(),d.getMonth()+1,0);
+  for(let i=firstDay.getDay()-1;i>=0;i--) grid.appendChild(makeCalDay(addDays(firstDay,-i-1),true));
+  for(let i=1;i<=lastDay.getDate();i++) grid.appendChild(makeCalDay(new Date(d.getFullYear(),d.getMonth(),i),false));
+  for(let i=1;i<=6-lastDay.getDay();i++) grid.appendChild(makeCalDay(addDays(lastDay,i),true));
+  container.appendChild(grid);
+}
 
-    <!-- YILLIK HEDEFLER -->
-    <section class="view" id="view-year-goals">
-      <header class="view-header">
-        <div><h1 class="view-title">Yıllık Hedefler</h1><p class="view-subtitle"><span id="current-year-label"></span> için büyük hayaller</p></div>
-        <button class="btn-primary" onclick="openGoalModal('year')">+ Hedef Ekle</button>
-      </header>
-      <div class="goals-grid" id="year-goals-list"><p class="empty-state full-width">Henüz yıllık hedef yok. Hayal kurmaya başla!</p></div>
-    </section>
+function makeCalDay(day,otherMonth) {
+  const dateStr=toDateStr(day), todayStr=today();
+  const dayTasks=getTasksForDate(dateStr);
+  const cell=document.createElement('div');
+  cell.className=`cal-day${otherMonth?' other-month':''}${dateStr===todayStr?' today':''}`;
+  cell.dataset.date=dateStr;
 
-    <!-- AYLIK HEDEFLER -->
-    <section class="view" id="view-month-goals">
-      <header class="view-header">
-        <div><h1 class="view-title">Aylık Hedefler</h1><p class="view-subtitle"><span id="current-month-label"></span> ayı odağı</p></div>
-        <button class="btn-primary" onclick="openGoalModal('month')">+ Hedef Ekle</button>
-      </header>
-      <div class="goals-grid" id="month-goals-list"><p class="empty-state full-width">Henüz aylık hedef yok.</p></div>
-    </section>
+  const num=document.createElement('div');
+  num.className='cal-day-num'; num.textContent=day.getDate();
+  cell.appendChild(num);
 
-    <!-- HAFTALIK HEDEFLER -->
-    <section class="view" id="view-week-goals">
-      <header class="view-header">
-        <div><h1 class="view-title">Haftalık Hedefler</h1><p class="view-subtitle">Bu haftanın hedefleri</p></div>
-        <button class="btn-primary" onclick="openGoalModal('week')">+ Hedef Ekle</button>
-      </header>
-      <div class="goals-grid" id="week-goals-list"><p class="empty-state full-width">Henüz haftalık hedef yok.</p></div>
-    </section>
+  dayTasks.slice(0,3).forEach(task=>{
+    const dot=document.createElement('div');
+    dot.className='cal-task-dot'; dot.textContent=task.title;
+    dot.style.background=task.color||'#b5d5c5';
+    dot.addEventListener('click',e=>{e.stopPropagation();openDetailModal(task._baseId||task.id);});
+    cell.appendChild(dot);
+  });
+  if(dayTasks.length>3){const more=document.createElement('div');more.className='cal-more';more.textContent=`+${dayTasks.length-3} more`;cell.appendChild(more);}
 
-    <!-- HAFTA PLANLAYICI -->
-    <section class="view" id="view-week-planner">
-      <header class="view-header">
-        <div><h1 class="view-title">Hafta Planlayıcı</h1><p class="view-subtitle" id="week-planner-range">Yükleniyor...</p></div>
-        <div class="header-actions">
-          <button class="btn-ghost" id="week-prev">← Önceki</button>
-          <button class="btn-ghost" id="week-next">Sonraki →</button>
-          <button class="btn-primary" id="week-add-task-btn">+ Görev Ekle</button>
-        </div>
-      </header>
-      <div class="week-board" id="week-board"></div>
-    </section>
+  cell.addEventListener('click',()=>openTaskModal(null,dateStr));
+  cell.addEventListener('dragover',e=>{e.preventDefault();cell.classList.add('drag-over');});
+  cell.addEventListener('dragleave',()=>cell.classList.remove('drag-over'));
+  cell.addEventListener('drop',e=>{e.preventDefault();cell.classList.remove('drag-over');moveTaskToDate(e.dataTransfer.getData('taskId'),dateStr);});
+  return cell;
+}
 
-    <!-- TAKVİM -->
-    <section class="view" id="view-calendar">
-      <header class="view-header">
-        <div><h1 class="view-title">Takvim</h1><p class="view-subtitle" id="cal-current-label">Yükleniyor...</p></div>
-        <div class="header-actions">
-          <div class="view-switcher">
-            <button class="vsw-btn active" data-calview="month">Ay</button>
-            <button class="vsw-btn" data-calview="week">Hafta</button>
-            <button class="vsw-btn" data-calview="day">Gün</button>
-            <button class="vsw-btn" data-calview="year">Yıl</button>
-          </div>
-          <button class="btn-ghost" id="cal-prev">←</button>
-          <button class="btn-ghost" id="cal-today-btn">Bugün</button>
-          <button class="btn-ghost" id="cal-next">→</button>
-          <button class="btn-primary" id="cal-add-task-btn">+ Görev Ekle</button>
-        </div>
-      </header>
-      <div id="calendar-container"></div>
-    </section>
+function renderWeekView(d,container,label) {
+  const ws=getWeekStart(d),we=addDays(ws,6);
+  label.textContent=`${formatShortDate(ws)} – ${formatShortDate(we)}`;
+  container.innerHTML='';
+  const view=document.createElement('div');
+  view.className='cal-week-view';
+  const todayStr=today();
 
-  </main>
+  const corner=document.createElement('div');corner.className='cal-week-header';view.appendChild(corner);
+  for(let i=0;i<7;i++){
+    const day=addDays(ws,i),h=document.createElement('div');
+    h.className=`cal-week-header${toDateStr(day)===todayStr?' today-col':''}`;
+    h.innerHTML=`<div class="week-header-day">${DAYS_S[day.getDay()]}</div><div class="week-header-date">${day.getDate()}</div>`;
+    view.appendChild(h);
+  }
 
-  <!-- GÖREV MODALI -->
-  <div class="modal-overlay hidden" id="task-modal-overlay">
-    <div class="modal">
-      <div class="modal-header">
-        <h2 id="task-modal-title">Yeni Görev</h2>
-        <button class="modal-close" id="task-modal-close">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group"><label>Görev Başlığı *</label><input type="text" id="task-title-input" placeholder="Ne yapılması gerekiyor?" /></div>
-        <div class="form-group"><label>Açıklama</label><textarea id="task-desc-input" placeholder="Daha fazla detay ekle..." rows="2"></textarea></div>
-        <div class="form-row">
-          <div class="form-group"><label>Tarih *</label><input type="date" id="task-date-input" /></div>
-          <div class="form-group"><label>Saat</label><input type="time" id="task-time-input" /></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>🔁 Tekrar</label>
-            <select id="task-recurrence-input">
-              <option value="none">Tekrar yok</option>
-              <option value="daily">Her gün</option>
-              <option value="weekly">Her hafta</option>
-              <option value="monthly">Her ay</option>
-              <option value="yearly">Her yıl</option>
-            </select>
-          </div>
-          <div class="form-group" id="recurrence-end-group">
-            <label>Bitiş tarihi</label>
-            <input type="date" id="task-recurrence-end" />
-          </div>
-        </div>
-        <div class="form-group">
-          <label>🔔 Hatırlatıcı</label>
-          <select id="task-reminder-input">
-            <option value="none">Hatırlatıcı yok</option>
-            <option value="0">Görev saatinde</option>
-            <option value="5">5 dakika önce</option>
-            <option value="15">15 dakika önce</option>
-            <option value="30">30 dakika önce</option>
-            <option value="60">1 saat önce</option>
-            <option value="1440">1 gün önce</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Renk Etiketi</label>
-          <div class="color-picker">
-            <span class="color-dot selected" data-color="#b5d5c5" style="background:#b5d5c5"></span>
-            <span class="color-dot" data-color="#ffd6a5" style="background:#ffd6a5"></span>
-            <span class="color-dot" data-color="#ffafcc" style="background:#ffafcc"></span>
-            <span class="color-dot" data-color="#a2d2ff" style="background:#a2d2ff"></span>
-            <span class="color-dot" data-color="#cdb4db" style="background:#cdb4db"></span>
-            <span class="color-dot" data-color="#caffbf" style="background:#caffbf"></span>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Görsel Ekle</label>
-          <label class="file-upload-area">
-            <span id="task-img-label">📎 Görsel yüklemek için tıkla</span>
-            <input type="file" accept="image/*" id="task-img-input" class="hidden-file" />
-          </label>
-          <img id="task-img-preview" src="" alt="" class="img-preview hidden" />
-        </div>
-        <input type="hidden" id="task-edit-id" value="" />
-      </div>
-      <div class="modal-footer">
-        <button class="btn-ghost" id="task-modal-cancel">İptal</button>
-        <button class="btn-primary" id="task-modal-save">Görevi Kaydet</button>
-      </div>
-    </div>
-  </div>
+  for(let h=0;h<24;h++){
+    const lbl=document.createElement('div');
+    lbl.className='cal-week-time-col';
+    lbl.textContent=h===0?'12 AM':h<12?`${h} AM`:h===12?'12 PM':`${h-12} PM`;
+    view.appendChild(lbl);
 
-  <!-- HEDEF MODALI -->
-  <div class="modal-overlay hidden" id="goal-modal-overlay">
-    <div class="modal">
-      <div class="modal-header">
-        <h2 id="goal-modal-title">Yeni Hedef</h2>
-        <button class="modal-close" id="goal-modal-close">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group"><label>Hedef Başlığı *</label><input type="text" id="goal-title-input" placeholder="Ne başarmak istiyorsun?" /></div>
-        <div class="form-group"><label>Açıklama</label><textarea id="goal-desc-input" placeholder="Hedefini açıkla..." rows="3"></textarea></div>
-        <input type="hidden" id="goal-type-input" /><input type="hidden" id="goal-edit-id" />
-      </div>
-      <div class="modal-footer">
-        <button class="btn-ghost" id="goal-modal-cancel">İptal</button>
-        <button class="btn-primary" id="goal-modal-save">Hedefi Kaydet</button>
-      </div>
-    </div>
-  </div>
+    for(let i=0;i<7;i++){
+      const day=addDays(ws,i),dStr=toDateStr(day),tStr=String(h).padStart(2,'0')+':00';
+      const slot=document.createElement('div');
+      slot.className='cal-week-hour-slot'; slot.dataset.date=dStr; slot.dataset.time=tStr;
+      getTasksForDate(dStr).filter(t=>t.time?.startsWith(String(h).padStart(2,'0'))).forEach(task=>{
+        const dot=document.createElement('div');dot.className='cal-task-dot';dot.textContent=task.title;dot.style.background=task.color||'#b5d5c5';
+        dot.addEventListener('click',e=>{e.stopPropagation();openDetailModal(task._baseId||task.id);});
+        slot.appendChild(dot);
+      });
+      slot.addEventListener('click',()=>openTaskModal(null,dStr,tStr));
+      slot.addEventListener('dragover',e=>{e.preventDefault();slot.classList.add('drag-over');});
+      slot.addEventListener('dragleave',()=>slot.classList.remove('drag-over'));
+      slot.addEventListener('drop',e=>{e.preventDefault();slot.classList.remove('drag-over');moveTaskToDate(e.dataTransfer.getData('taskId'),dStr,tStr);});
+      view.appendChild(slot);
+    }
+  }
+  container.appendChild(view);
+}
 
-  <!-- DETAY MODALI -->
-  <div class="modal-overlay hidden" id="detail-modal-overlay">
-    <div class="modal">
-      <div class="modal-header">
-        <h2 id="detail-task-title">Görev Detayı</h2>
-        <button class="modal-close" id="detail-modal-close">✕</button>
-      </div>
-      <div class="modal-body" id="detail-modal-body"></div>
-      <div class="modal-footer">
-        <button class="btn-danger" id="detail-delete-btn">Sil</button>
-        <button class="btn-primary" id="detail-edit-btn">Görevi Düzenle</button>
-      </div>
-    </div>
-  </div>
+function renderDayView(d,container,label) {
+  label.textContent=formatDisplayDate(d);
+  container.innerHTML='';
+  const view=document.createElement('div');view.className='cal-day-view';
+  const dateStr=toDateStr(d);
+  for(let h=0;h<24;h++){
+    const tStr=String(h).padStart(2,'0')+':00';
+    const lbl=document.createElement('div');lbl.className='cal-hour-label';
+    lbl.textContent=h===0?'12 AM':h<12?`${h} AM`:h===12?'12 PM':`${h-12} PM`;
+    view.appendChild(lbl);
+    const slot=document.createElement('div');slot.className='cal-hour-slot';slot.dataset.date=dateStr;slot.dataset.time=tStr;
+    getTasksForDate(dateStr).filter(t=>t.time?.startsWith(String(h).padStart(2,'0'))).forEach(t=>slot.appendChild(createTaskCard(t)));
+    slot.addEventListener('click',e=>{if(e.target.closest('.task-card'))return;openTaskModal(null,dateStr,tStr);});
+    slot.addEventListener('dragover',e=>{e.preventDefault();slot.classList.add('drag-over');});
+    slot.addEventListener('dragleave',()=>slot.classList.remove('drag-over'));
+    slot.addEventListener('drop',e=>{e.preventDefault();slot.classList.remove('drag-over');moveTaskToDate(e.dataTransfer.getData('taskId'),dateStr,tStr);});
+    view.appendChild(slot);
+  }
+  container.appendChild(view);
+}
 
-  <!-- MOBİL ALT NAV -->
-  <nav class="mobile-bottom-nav">
-    <div class="bottom-nav-inner">
-      <a href="#" class="bottom-nav-item active" data-view="dashboard">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-        Ana Sayfa
-      </a>
-      <a href="#" class="bottom-nav-item" data-view="week-planner">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>
-        Planlayıcı
-      </a>
-      <a href="#" class="bottom-nav-item" data-view="calendar">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        Takvim
-      </a>
-      <a href="#" class="bottom-nav-item" data-view="year-goals">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-        Hedefler
-      </a>
-    </div>
-  </nav>
+function renderYearView(d,container,label) {
+  label.textContent=d.getFullYear();
+  container.innerHTML='';
+  const grid=document.createElement('div');grid.className='cal-year-grid';
+  const todayStr=today();
 
-  <button class="mobile-fab" id="mobile-fab" aria-label="Yeni görev ekle">+</button>
+  for(let m=0;m<12;m++){
+    const month=document.createElement('div');month.className='cal-mini-month';
+    const hdr=document.createElement('div');hdr.className='cal-mini-header';hdr.textContent=MONTHS[m];
+    const miniGrid=document.createElement('div');miniGrid.className='cal-mini-grid';
+    ['S','M','T','W','T','F','S'].forEach(n=>{const c=document.createElement('div');c.className='cal-mini-cell header';c.textContent=n;miniGrid.appendChild(c);});
 
-  <script src="app.js"></script>
-  <script src="upgrades.js"></script>
-  <script src="music.js"></script>
-</body>
-</html>
+    const firstDay=new Date(d.getFullYear(),m,1),lastDay=new Date(d.getFullYear(),m+1,0);
+    for(let i=0;i<firstDay.getDay();i++) miniGrid.appendChild(document.createElement('div'));
+    for(let day=1;day<=lastDay.getDate();day++){
+      const dStr=`${d.getFullYear()}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      const hasT=getTasksForDate(dStr).length>0;
+      const c=document.createElement('div');
+      c.className=`cal-mini-cell${hasT?' has-task':''}${dStr===todayStr?' today':''}`;
+      c.textContent=day; miniGrid.appendChild(c);
+    }
+    month.addEventListener('click',()=>{
+      state.calendarDate=new Date(d.getFullYear(),m,1);state.calendarView='month';
+      document.querySelectorAll('.vsw-btn').forEach(b=>b.classList.toggle('active',b.dataset.calview==='month'));
+      renderCalendar();
+    });
+    month.appendChild(hdr);month.appendChild(miniGrid);grid.appendChild(month);
+  }
+  container.appendChild(grid);
+}
+
+function calNavigate(dir) {
+  const d=state.calendarDate;
+  switch(state.calendarView){
+    case 'year':  state.calendarDate=new Date(d.getFullYear()+dir,d.getMonth(),1); break;
+    case 'month': state.calendarDate=new Date(d.getFullYear(),d.getMonth()+dir,1); break;
+    case 'week':  state.calendarDate=addDays(d,dir*7); break;
+    case 'day':   state.calendarDate=addDays(d,dir);   break;
+  }
+  saveState(); renderCalendar();
+}
+
+/* ============================================================
+   18. DETAIL MODAL
+   ============================================================ */
+let detailTaskId=null;
+
+function openDetailModal(taskId) {
+  const task=state.tasks.find(t=>t.id===taskId); if(!task) return;
+  detailTaskId=taskId;
+  document.getElementById('detail-task-title').textContent=task.title;
+  const recStr = task.recurrence&&task.recurrence!=='none' ? `<div class="detail-row"><span class="detail-label">Repeat</span><span class="detail-value">🔁 ${task.recurrence}</span></div>` : '';
+  const remStr = task.reminder&&task.reminder!=='none' ? `<div class="detail-row"><span class="detail-label">Reminder</span><span class="detail-value">🔔 ${task.reminder==='0'?'At task time':task.reminder+' min before'}</span></div>` : '';
+  document.getElementById('detail-modal-body').innerHTML=`
+    ${task.description?`<div class="detail-row"><span class="detail-label">Notes</span><span class="detail-value">${escHtml(task.description)}</span></div>`:''}
+    <div class="detail-row"><span class="detail-label">Date</span><span class="detail-value">${task.date?formatDisplayDate(fromDateStr(task.date)):'—'}</span></div>
+    ${task.time?`<div class="detail-row"><span class="detail-label">Time</span><span class="detail-value">${task.time}</span></div>`:''}
+    ${recStr}${remStr}
+    <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value" style="color:${task.completed?'var(--success)':'var(--text-muted)'}">${task.completed?'✅ Completed':'⏳ Pending'}</span></div>
+    ${task.image?`<img src="${task.image}" class="detail-img" alt="" />`:''}`;
+  document.getElementById('detail-modal-overlay').classList.remove('hidden');
+}
+
+function closeDetailModal(){document.getElementById('detail-modal-overlay').classList.add('hidden');detailTaskId=null;}
+
+/* ============================================================
+   19. IMAGE UPLOAD
+   ============================================================ */
+function fileToBase64(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(file);});}
+
+async function handleWidgetImageUpload(file,key,imgId,zoneId){
+  const b64=await fileToBase64(file);
+  state.images[key]=b64; saveState();
+  document.getElementById(imgId).src=b64;
+  document.getElementById(imgId).classList.remove('hidden');
+  const p=document.getElementById(zoneId).querySelector('p');
+  if(p) p.style.display='none';
+}
+
+/* ============================================================
+   20. TOAST
+   ============================================================ */
+let toastTimeout=null;
+function showToast(msg) {
+  const toast=document.getElementById('toast');
+  toast.textContent=msg; toast.classList.remove('hidden'); toast.classList.add('show');
+  if(toastTimeout) clearTimeout(toastTimeout);
+  toastTimeout=setTimeout(()=>{toast.classList.remove('show');setTimeout(()=>toast.classList.add('hidden'),300);},2500);
+}
+
+/* ============================================================
+   21. UTILITY
+   ============================================================ */
+function escHtml(s){if(!s)return '';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function updateSidebarDate(){const d=new Date();document.getElementById('sidebar-date').textContent=`${DAYS_S[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;}
+
+/* ============================================================
+   22. EVENT LISTENERS
+   ============================================================ */
+function initEventListeners() {
+  // Sidebar nav
+  document.querySelectorAll('.nav-item').forEach(item=>{
+    item.addEventListener('click',e=>{e.preventDefault();showView(item.dataset.view);});
+  });
+
+  // Dashboard
+  document.getElementById('quick-add-btn').addEventListener('click',()=>openTaskModal());
+
+  // Task Modal
+  document.getElementById('task-modal-close').addEventListener('click',closeTaskModal);
+  document.getElementById('task-modal-cancel').addEventListener('click',closeTaskModal);
+  document.getElementById('task-modal-save').addEventListener('click',saveTask);
+  document.getElementById('task-modal-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeTaskModal();});
+
+  // Color dots
+  document.querySelectorAll('.color-dot').forEach(dot=>{
+    dot.addEventListener('click',()=>{document.querySelectorAll('.color-dot').forEach(d=>d.classList.remove('selected'));dot.classList.add('selected');});
+  });
+
+  // Task image
+  document.getElementById('task-img-input').addEventListener('change',async e=>{
+    const file=e.target.files[0]; if(!file) return;
+    taskModalImage=await fileToBase64(file);
+    document.getElementById('task-img-preview').src=taskModalImage;
+    document.getElementById('task-img-preview').classList.remove('hidden');
+    document.getElementById('task-img-label').textContent='📎 Image attached';
+  });
+
+  // Recurrence end date visibility
+  document.getElementById('task-recurrence-input').addEventListener('change', e=>{
+    document.getElementById('recurrence-end-group').style.opacity = e.target.value==='none' ? '0.4' : '1';
+  });
+
+  // Goal Modal
+  document.getElementById('goal-modal-close').addEventListener('click',closeGoalModal);
+  document.getElementById('goal-modal-cancel').addEventListener('click',closeGoalModal);
+  document.getElementById('goal-modal-save').addEventListener('click',saveGoal);
+  document.getElementById('goal-modal-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeGoalModal();});
+
+  // Detail Modal
+  document.getElementById('detail-modal-close').addEventListener('click',closeDetailModal);
+  document.getElementById('detail-modal-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeDetailModal();});
+  document.getElementById('detail-delete-btn').addEventListener('click',()=>{if(detailTaskId){deleteTask(detailTaskId);closeDetailModal();}});
+  document.getElementById('detail-edit-btn').addEventListener('click',()=>{const id=detailTaskId;closeDetailModal();openTaskModal(id);});
+
+  // Week Planner
+  document.getElementById('week-prev').addEventListener('click',()=>{state.weekPlannerOffset--;saveState();renderWeekPlanner();});
+  document.getElementById('week-next').addEventListener('click',()=>{state.weekPlannerOffset++;saveState();renderWeekPlanner();});
+  document.getElementById('week-add-task-btn').addEventListener('click',()=>openTaskModal());
+
+  // Calendar
+  document.getElementById('cal-prev').addEventListener('click',()=>calNavigate(-1));
+  document.getElementById('cal-next').addEventListener('click',()=>calNavigate(1));
+  document.getElementById('cal-today-btn').addEventListener('click',()=>{state.calendarDate=new Date();saveState();renderCalendar();});
+  document.getElementById('cal-add-task-btn').addEventListener('click',()=>openTaskModal(null,toDateStr(state.calendarDate)));
+  document.querySelectorAll('.vsw-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.vsw-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active'); state.calendarView=btn.dataset.calview; saveState(); renderCalendar();
+    });
+  });
+
+  // Widget image
+  document.querySelector('.hidden-file[data-widget="img1"]').addEventListener('change',async e=>{
+    const file=e.target.files[0]; if(file) await handleWidgetImageUpload(file,'img1','widget-img-1','img-zone-1');
+  });
+
+  // Dark mode toggles
+  document.getElementById('dark-mode-toggle').addEventListener('click',toggleDarkMode);
+  document.getElementById('mobile-theme-btn').addEventListener('click',toggleDarkMode);
+
+  // Notification banner
+  document.getElementById('notif-allow-btn').addEventListener('click',requestNotificationPermission);
+  document.getElementById('notif-deny-btn').addEventListener('click',()=>{
+    document.getElementById('notif-banner').classList.add('hidden');
+    localStorage.setItem('notif-dismissed','1');
+  });
+
+  // Auth skip (use without account)
+  document.getElementById('auth-skip-btn').addEventListener('click',()=>{
+    hideAuthGate();
+    showToast('Yerel depolama kullanılıyor — veriler bu cihazda');
+  });
+
+  // Mobile bottom nav
+  document.querySelectorAll('.bottom-nav-item').forEach(item=>{
+    item.addEventListener('click',e=>{e.preventDefault();showView(item.dataset.view);});
+  });
+
+  // Mobile FAB
+  document.getElementById('mobile-fab').addEventListener('click',()=>openTaskModal());
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){closeTaskModal();closeGoalModal();closeDetailModal();}
+    if((e.ctrlKey||e.metaKey)&&e.key==='n'){e.preventDefault();openTaskModal();}
+    if(e.key==='['&&!e.ctrlKey&&!e.metaKey&&!SB.isMobile()) SB.toggleCollapse();
+  });
+
+  document.getElementById('task-title-input').addEventListener('keydown',e=>{if(e.key==='Enter')saveTask();});
+  document.getElementById('goal-title-input').addEventListener('keydown',e=>{if(e.key==='Enter')saveGoal();});
+}
+
+/* ============================================================
+   23. SERVICE WORKER
+   ============================================================ */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(()=>console.log('[SW] Registered'))
+      .catch(e=>console.warn('[SW] Failed:',e));
+  });
+}
+
+/* ============================================================
+   24. INIT
+   ============================================================ */
+function init() {
+  loadState();
+
+  // Dark mode
+  applyTheme(state.darkMode);
+
+  // Sidebar
+  SB.init();
+
+  // Firebase (only if configured)
+  initFirebase();
+
+  // Firebase devre dışı - direkt giriş
+  hideAuthGate();
+
+  // Calendar view buttons
+  document.querySelectorAll('.vsw-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.calview===state.calendarView);
+  });
+
+  // Init event listeners
+  initEventListeners();
+
+  // Render dashboard
+  showView('dashboard');
+
+  // Update sidebar date
+  updateSidebarDate();
+  setInterval(updateSidebarDate, 60000);
+
+  // Schedule existing reminders
+  const savedPerm = localStorage.getItem('notif-perm');
+  if (savedPerm==='granted') {
+    notificationPermission='granted';
+    scheduleAllReminders();
+  } else if (!savedPerm && !localStorage.getItem('notif-dismissed') && 'Notification' in window) {
+    // Show notification banner after 3 seconds
+    setTimeout(()=>{
+      document.getElementById('notif-banner').classList.remove('hidden');
+    }, 3000);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', init);
